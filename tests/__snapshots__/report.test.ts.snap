@@ -1,0 +1,28 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`renderReport is a pure function over the event list: snapshot 1`] = `
+"# Capataz run report — toy-feature
+
+- Outcome: completed
+- Branch: capataz/toy-feature
+- Escalations: 1
+
+## Issues
+
+| Issue | Status | Attempts | Duration | Files touched |
+| ----- | ------ | -------- | -------- | ------------- |
+| 01 — scaffold | done | 1 | 2.3s | f1.txt, src/a.ts |
+| 02 — flaky | ready-for-human | 2 | 61.3s | – |
+| 03 — dependent | skipped | – | – | – |
+| 04 — independent | done | 1 | 0.8s | f4.txt |
+
+## Skipped
+
+- 03 — dependent: blocked by 02
+
+## Commits
+
+- abc1234 — 01 — scaffold
+- 9876543 — 04 — independent
+"
+`;

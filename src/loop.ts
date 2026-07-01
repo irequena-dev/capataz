@@ -39,7 +39,7 @@ export type RunEvent =
   | { type: "issue-committed"; issue: number; commit: string; filesTouched: string[]; at: number }
   | { type: "issue-done"; issue: number; attempts: number; durationMs: number; at: number }
   | { type: "issue-escalated"; issue: number; attempts: number; durationMs: number; at: number }
-  | { type: "issue-skipped"; issue: number; blockedBy: number[]; at: number }
+  | { type: "issue-skipped"; issue: number; title: string; blockedBy: number[]; at: number }
   | {
       type: "run-finished";
       outcome: "completed" | "aborted";
@@ -118,14 +118,20 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
     if (issue.status !== "ready-for-agent") {
       const outcome: IssueOutcome = { kind: "skipped", issue: number, blockedBy: [] };
       outcomes.push(outcome);
-      emit({ type: "issue-skipped", issue: number, blockedBy: [], at: Date.now() });
+      emit({ type: "issue-skipped", issue: number, title: issue.title, blockedBy: [], at: Date.now() });
       continue;
     }
 
     const blockers = blockedBy(plan, number);
     if (blockers.length > 0) {
       outcomes.push({ kind: "skipped", issue: number, blockedBy: blockers });
-      emit({ type: "issue-skipped", issue: number, blockedBy: blockers, at: Date.now() });
+      emit({
+        type: "issue-skipped",
+        issue: number,
+        title: issue.title,
+        blockedBy: blockers,
+        at: Date.now(),
+      });
       continue;
     }
 
