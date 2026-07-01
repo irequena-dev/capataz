@@ -1,1 +1,3 @@
-console.log("Hello via Bun!");
+import { main } from "./src/cli";
+
+process.exit(await main(process.argv.slice(2)));

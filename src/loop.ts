@@ -76,6 +76,8 @@ export interface RunLoopDeps {
   repoPath: string;
   invokeFn?: InvokeFn;
   onEvent?: (event: RunEvent) => void;
+  /** Run exactly this issue instead of the whole plan (deps must be done). */
+  only?: number;
 }
 
 async function runVerification(
@@ -109,9 +111,15 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
   const escalatedIssues: Issue[] = [];
   let escalations = 0;
 
+  let order = plan.order;
+  if (deps.only !== undefined) {
+    if (!plan.issues.has(deps.only)) throw new Error(`Unknown issue number ${deps.only}`);
+    order = [deps.only];
+  }
+
   emit({ type: "run-started", feature: plan.feature, at: Date.now() });
 
-  for (const number of plan.order) {
+  for (const number of order) {
     const issue = plan.issues.get(number)!;
     if (issue.status === "done") continue;
 

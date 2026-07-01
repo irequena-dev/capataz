@@ -1,6 +1,6 @@
 # 09 — CLI entrypoint and end-to-end smoke
 
-Status: ready-for-agent
+Status: done
 Depends-on: 06, 07, 08
 Verification: bun test tests/e2e.test.ts
 
