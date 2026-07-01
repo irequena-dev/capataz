@@ -81,18 +81,15 @@ function topologicalOrder(issues: Map<number, Issue>): number[] | undefined {
   }
   const order: number[] = [];
   while (remaining.size > 0) {
-    const ready = [...remaining.entries()]
+    // Lowest ready issue number first, so the order follows plan authoring.
+    const next = [...remaining.entries()]
       .filter(([, deps]) => deps.size === 0)
       .map(([n]) => n)
-      .toSorted((a, b) => a - b);
-    if (ready.length === 0) return undefined;
-    for (const n of ready) {
-      order.push(n);
-      remaining.delete(n);
-    }
-    for (const deps of remaining.values()) {
-      for (const n of ready) deps.delete(n);
-    }
+      .toSorted((a, b) => a - b)[0];
+    if (next === undefined) return undefined;
+    order.push(next);
+    remaining.delete(next);
+    for (const deps of remaining.values()) deps.delete(next);
   }
   return order;
 }

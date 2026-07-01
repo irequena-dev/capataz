@@ -1,6 +1,6 @@
 # 06 — The run loop
 
-Status: ready-for-agent
+Status: done
 Depends-on: 03, 04, 05
 Verification: bun test tests/loop.test.ts
 
