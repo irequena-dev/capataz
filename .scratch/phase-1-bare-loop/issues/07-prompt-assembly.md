@@ -1,6 +1,6 @@
 # 07 — Executor prompt assembly
 
-Status: ready-for-agent
+Status: done
 Depends-on: 04
 Verification: bun test tests/prompt.test.ts
 
