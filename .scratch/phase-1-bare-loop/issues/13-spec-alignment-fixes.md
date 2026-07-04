@@ -1,6 +1,6 @@
 # 13 — Spec alignment: exit code, diffStat, done-issue Verification
 
-Status: ready-for-agent
+Status: done
 Depends-on: 09
 Verification: bun test
 

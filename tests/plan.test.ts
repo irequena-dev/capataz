@@ -72,6 +72,28 @@ describe("loadPlan", () => {
     expect(all).toMatch(/cycle/i);
   });
 
+  test("done issue without Verification loads fine", () => {
+    const dir = makePlan([
+      { number: "01", slug: "a", status: "done", verification: null },
+      { number: "02", slug: "b", dependsOn: "01" },
+    ]);
+    const result = loadPlan(dir);
+    expect(result.kind).toBe("valid");
+  });
+
+  test("non-done issue without Verification is a problem, reported with the rest", () => {
+    const dir = makePlan([
+      { number: "01", slug: "a", verification: null },
+      { number: "02", slug: "b", dependsOn: "99" },
+    ]);
+    const result = loadPlan(dir);
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid") throw new Error("unreachable");
+    const all = result.problems.join("\n");
+    expect(all).toMatch(/01.*Verification|Verification.*01/s);
+    expect(all).toMatch(/99/);
+  });
+
   test("missing PRD.md is a problem", () => {
     const dir = makePlan([{ number: "01", slug: "a" }]);
     rmSync(join(dir, "PRD.md"));

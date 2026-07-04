@@ -17,8 +17,12 @@ function issue(overrides: Partial<Issue> = {}): Issue {
 }
 
 const doneSummaries: DoneSummary[] = [
-  { number: 1, title: "01 — Scaffold server", files: ["src/server.ts", "package.json"] },
-  { number: 2, title: "02 — Add router", files: ["src/router.ts"] },
+  {
+    number: 1,
+    title: "01 — Scaffold server",
+    files: ["src/server.ts (+40/-0)", "package.json (+5/-1)"],
+  },
+  { number: 2, title: "02 — Add router", files: ["src/router.ts (+12/-0)"] },
 ];
 
 describe("buildPrompt", () => {
@@ -40,8 +44,8 @@ describe("buildPrompt", () => {
 
   test("contains done summaries as `- <NN> <title>: <files>` lines", () => {
     const prompt = buildPrompt(issue(), doneSummaries, []);
-    expect(prompt).toContain("- 01 — Scaffold server: src/server.ts, package.json");
-    expect(prompt).toContain("- 02 — Add router: src/router.ts");
+    expect(prompt).toContain("- 01 — Scaffold server: src/server.ts (+40/-0), package.json (+5/-1)");
+    expect(prompt).toContain("- 02 — Add router: src/router.ts (+12/-0)");
   });
 
   test("is a pure function (same inputs, same output)", () => {

@@ -45,6 +45,11 @@ export function loadPlan(dir: string): PlanLoadResult {
   }
 
   for (const issue of issues.values()) {
+    if (issue.status !== "done" && issue.verification === undefined) {
+      problems.push(
+        `issue ${issue.number}: missing Verification: command (required unless done)`,
+      );
+    }
     for (const dep of issue.dependsOn) {
       if (!issues.has(dep)) {
         problems.push(

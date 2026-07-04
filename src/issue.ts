@@ -19,7 +19,8 @@ export interface Issue {
   title: string;
   status: IssueStatus;
   dependsOn: number[];
-  verification: string;
+  /** Required unless the issue is `done`. */
+  verification: string | undefined;
   body: string;
   path: string;
 }
@@ -100,11 +101,11 @@ export function parseIssueFile(path: string): IssueParseResult {
   if (status === undefined && !problems.some((p) => p.startsWith("unknown status"))) {
     problems.push("missing Status: line");
   }
-  if (verification === undefined || verification === "") {
+  if ((verification === undefined || verification === "") && status !== "done") {
     problems.push("missing Verification: command");
   }
 
-  if (problems.length > 0 || status === undefined || verification === undefined) {
+  if (problems.length > 0 || status === undefined) {
     return { kind: "invalid", path, problems };
   }
 
@@ -116,7 +117,7 @@ export function parseIssueFile(path: string): IssueParseResult {
       title: title ?? "",
       status,
       dependsOn: dependsOn ?? [],
-      verification,
+      verification: verification === "" ? undefined : verification,
       body: bodyLines.join("\n").trim(),
       path,
     },

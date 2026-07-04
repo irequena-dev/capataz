@@ -13,8 +13,8 @@ Add a GET /health endpoint returning 200 with body \`ok\`.
 
 ## Done so far this run
 
-- 01 — Scaffold server: src/server.ts, package.json
-- 02 — Add router: src/router.ts"
+- 01 — Scaffold server: src/server.ts (+40/-0), package.json (+5/-1)
+- 02 — Add router: src/router.ts (+12/-0)"
 `;
 
 exports[`buildPrompt retry attempt with failures: snapshot 1`] = `
@@ -30,8 +30,8 @@ Add a GET /health endpoint returning 200 with body \`ok\`.
 
 ## Done so far this run
 
-- 01 — Scaffold server: src/server.ts, package.json
-- 02 — Add router: src/router.ts
+- 01 — Scaffold server: src/server.ts (+40/-0), package.json (+5/-1)
+- 02 — Add router: src/router.ts (+12/-0)
 
 ## Previous failed attempts
 

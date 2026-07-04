@@ -84,12 +84,15 @@ describe("Git", () => {
   });
 
   describe("diffStat", () => {
-    test("lists files touched since a ref", () => {
+    test("lists per-file entries with line-change counts since a ref", () => {
       const base = sh(repo, "rev-parse", "HEAD").trim();
-      writeFileSync(join(repo, "a.ts"), "export {};\n");
-      writeFileSync(join(repo, "b.ts"), "export {};\n");
+      writeFileSync(join(repo, "a.ts"), "export {};\nexport const x = 1;\n");
+      writeFileSync(join(repo, "README.md"), "goodbye\nworld\n");
       git.commitIssue({ number: 1, slug: "two-files" });
-      expect(git.diffStat(base).toSorted()).toEqual(["a.ts", "b.ts"]);
+      expect(git.diffStat(base).toSorted()).toEqual([
+        "README.md (+2/-1)",
+        "a.ts (+2/-0)",
+      ]);
     });
   });
 

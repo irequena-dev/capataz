@@ -214,7 +214,7 @@ describe("capataz run (e2e)", () => {
     expect(existsSync(join(fixture.repo, "f3.txt"))).toBe(false);
   });
 
-  test("--issue NN with a non-done dependency fails without dispatching", () => {
+  test("--issue NN with a non-done dependency skips without dispatching (exit 0: no escalations)", () => {
     const fixture = makeFixture(
       [
         { number: "01", slug: "one", verification: "test -f f1.txt" },
@@ -223,9 +223,38 @@ describe("capataz run (e2e)", () => {
       obedientBackend,
     );
     const result = runCli(fixture, "--issue", "2");
-    expect(result.exitCode).not.toBe(0);
+    expect(result.exitCode).toBe(0);
     expect(existsSync(join(fixture.repo, "f2.txt"))).toBe(false);
     expect(statusOf(fixture, "02-two.md")).toBe("ready-for-agent");
+  });
+
+  test("--issue NN with other issues left pending exits 0", () => {
+    const fixture = makeFixture(
+      [
+        { number: "01", slug: "one", verification: "test -f f1.txt" },
+        { number: "02", slug: "two", verification: "test -f f2.txt" },
+      ],
+      obedientBackend,
+    );
+    const result = runCli(fixture, "--issue", "1");
+    expect(result.exitCode).toBe(0);
+    expect(statusOf(fixture, "01-one.md")).toBe("done");
+    expect(statusOf(fixture, "02-two.md")).toBe("ready-for-agent");
+    expect(existsSync(join(fixture.repo, "f2.txt"))).toBe(false);
+  });
+
+  test("skipped-but-unescalated full run exits 0", () => {
+    const fixture = makeFixture(
+      [
+        { number: "01", slug: "one", verification: "test -f f1.txt" },
+        { number: "02", slug: "triage-me", status: "needs-triage", verification: "true" },
+      ],
+      obedientBackend,
+    );
+    const result = runCli(fixture);
+    expect(result.exitCode).toBe(0);
+    expect(statusOf(fixture, "01-one.md")).toBe("done");
+    expect(statusOf(fixture, "02-triage-me.md")).toBe("needs-triage");
   });
 
   test("refuses a dirty working tree", () => {

@@ -93,6 +93,19 @@ describe("parseIssueFile", () => {
     expect(result.problems.join(" ")).toMatch(/Verification/);
   });
 
+  test("missing Verification on a done issue is valid", () => {
+    const path = tmpIssue(
+      "04-x.md",
+      sample
+        .replace("Status: ready-for-agent", "Status: done")
+        .replace("Verification: bun test tests/issue.test.ts\n", ""),
+    );
+    const result = parseIssueFile(path);
+    expect(result.kind).toBe("valid");
+    if (result.kind !== "valid") throw new Error("unreachable");
+    expect(result.issue.verification).toBeUndefined();
+  });
+
   test("unknown status yields invalid result", () => {
     const path = tmpIssue(
       "05-x.md",

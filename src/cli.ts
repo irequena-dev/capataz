@@ -79,7 +79,7 @@ export async function main(argv: string[]): Promise<number> {
     console.log(`Branch: capataz/${plan.feature}`);
     console.log(`Report: ${reportPath}`);
 
-    const clean = result.kind === "completed" && escalated === 0 && skipped === 0;
+    const clean = result.kind === "completed" && escalated === 0;
     return clean ? 0 : 1;
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));

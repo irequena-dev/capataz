@@ -196,6 +196,11 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
     let attempts = 0;
 
     try {
+      // Guaranteed by the plan loader for non-done issues.
+      const verification = issue.verification;
+      if (verification === undefined) {
+        throw new Error(`Issue ${number} has no Verification command`);
+      }
       const headBefore = git.head();
       emit({ type: "issue-started", issue: number, title: issue.title, at: startedAt });
       writeIssueStatus(issue.path, "in-progress");
@@ -232,7 +237,7 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
           case "error": {
             // Even if the runner exited non-zero, the Verification command decides.
             const verified = await runVerification(
-              issue.verification,
+              verification,
               repoPath,
               config.budgets.verification_timeout_minutes,
             );
@@ -240,7 +245,7 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
               type: "verification-result",
               issue: number,
               attempt: attempts,
-              command: issue.verification,
+              command: verification,
               exitCode: verified.exitCode,
               output: verified.output,
               at: Date.now(),

@@ -7,7 +7,7 @@ export interface Git {
   commitIssue(issue: { number: number; slug: string }): void;
   /** Hard-reset tracked files and clean untracked ones, back to last commit. */
   revertToLastGood(): void;
-  /** Files touched between `ref` and HEAD. */
+  /** Per-file change summaries (`path (+added/-deleted)`) between `ref` and HEAD. */
   diffStat(ref: string): string[];
   /** Current commit hash. */
   head(): string;
@@ -58,10 +58,15 @@ export function createGit(repoPath: string): Git {
     },
 
     diffStat(ref) {
-      return run("diff", "--name-only", ref, "HEAD")
+      return run("diff", "--numstat", ref, "HEAD")
         .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line !== "");
+        .filter((line) => line.trim() !== "")
+        .map((line) => {
+          const [added, deleted, ...rest] = line.split("\t");
+          const path = rest.join("\t");
+          if (added === "-" || deleted === "-") return `${path} (binary)`;
+          return `${path} (+${added}/-${deleted})`;
+        });
     },
 
     head() {
