@@ -1,6 +1,6 @@
 # 11 — Contain git and status-write failures inside the loop
 
-Status: ready-for-agent
+Status: done
 Depends-on: 06
 Verification: bun test tests/loop.test.ts
 

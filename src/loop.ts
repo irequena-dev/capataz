@@ -41,6 +41,7 @@ export type RunEvent =
   | { type: "issue-done"; issue: number; attempts: number; durationMs: number; at: number }
   | { type: "issue-escalated"; issue: number; attempts: number; durationMs: number; at: number }
   | { type: "issue-skipped"; issue: number; title: string; blockedBy: number[]; at: number }
+  | { type: "infrastructure-failure"; issue: number; error: string; at: number }
   | {
       type: "run-finished";
       outcome: "completed" | "aborted";
@@ -65,7 +66,7 @@ export type RunResult =
   | { kind: "completed"; outcomes: IssueOutcome[]; escalations: number }
   | {
       kind: "aborted";
-      reason: "escalation-budget-exceeded";
+      reason: "escalation-budget-exceeded" | "infrastructure-failure";
       outcomes: IssueOutcome[];
       escalations: number;
     };
@@ -190,93 +191,134 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
     }
 
     const startedAt = Date.now();
-    const headBefore = git.head();
-    emit({ type: "issue-started", issue: number, title: issue.title, at: startedAt });
-    writeIssueStatus(issue.path, "in-progress");
-    issue.status = "in-progress";
-
     const failures: string[] = [];
     let done = false;
     let attempts = 0;
 
-    while (attempts < config.budgets.max_attempts_per_issue && !done) {
-      attempts += 1;
-      emit({ type: "attempt-started", issue: number, attempt: attempts, at: Date.now() });
+    try {
+      const headBefore = git.head();
+      emit({ type: "issue-started", issue: number, title: issue.title, at: startedAt });
+      writeIssueStatus(issue.path, "in-progress");
+      issue.status = "in-progress";
 
-      const prompt = buildPrompt(issue, doneSummaries, failures);
-      const invoked = await invokeFn(executor, prompt, { cwd: repoPath });
-      emit({
-        type: "backend-result",
-        issue: number,
-        attempt: attempts,
-        backend: executorName,
-        kind: invoked.kind,
-        exitCode: invoked.kind === "timeout" ? undefined : invoked.exitCode,
-        durationMs: invoked.durationMs,
-        stdout: invoked.stdout,
-        stderr: invoked.stderr,
-        at: Date.now(),
-      });
+      while (attempts < config.budgets.max_attempts_per_issue && !done) {
+        attempts += 1;
+        emit({ type: "attempt-started", issue: number, attempt: attempts, at: Date.now() });
 
-      let attemptResult: AttemptResult;
-      switch (invoked.kind) {
-        case "timeout":
-          attemptResult = {
-            kind: "red",
-            failureOutput: `Runner timed out after ${invoked.durationMs}ms.\n${invoked.stdout}${invoked.stderr}`,
-          };
-          break;
-        case "ok":
-        case "error": {
-          // Even if the runner exited non-zero, the Verification command decides.
-          const verified = await runVerification(
-            issue.verification,
-            repoPath,
-            config.budgets.verification_timeout_minutes,
-          );
-          emit({
-            type: "verification-result",
-            issue: number,
-            attempt: attempts,
-            command: issue.verification,
-            exitCode: verified.exitCode,
-            output: verified.output,
-            at: Date.now(),
-          });
-          attemptResult =
-            verified.exitCode === 0
-              ? { kind: "green" }
-              : { kind: "red", failureOutput: verified.output };
-          break;
+        const prompt = buildPrompt(issue, doneSummaries, failures);
+        const invoked = await invokeFn(executor, prompt, { cwd: repoPath });
+        emit({
+          type: "backend-result",
+          issue: number,
+          attempt: attempts,
+          backend: executorName,
+          kind: invoked.kind,
+          exitCode: invoked.kind === "timeout" ? undefined : invoked.exitCode,
+          durationMs: invoked.durationMs,
+          stdout: invoked.stdout,
+          stderr: invoked.stderr,
+          at: Date.now(),
+        });
+
+        let attemptResult: AttemptResult;
+        switch (invoked.kind) {
+          case "timeout":
+            attemptResult = {
+              kind: "red",
+              failureOutput: `Runner timed out after ${invoked.durationMs}ms.\n${invoked.stdout}${invoked.stderr}`,
+            };
+            break;
+          case "ok":
+          case "error": {
+            // Even if the runner exited non-zero, the Verification command decides.
+            const verified = await runVerification(
+              issue.verification,
+              repoPath,
+              config.budgets.verification_timeout_minutes,
+            );
+            emit({
+              type: "verification-result",
+              issue: number,
+              attempt: attempts,
+              command: issue.verification,
+              exitCode: verified.exitCode,
+              output: verified.output,
+              at: Date.now(),
+            });
+            attemptResult =
+              verified.exitCode === 0
+                ? { kind: "green" }
+                : { kind: "red", failureOutput: verified.output };
+            break;
+          }
+        }
+
+        switch (attemptResult.kind) {
+          case "green":
+            done = true;
+            break;
+          case "red":
+            failures.push(attemptResult.failureOutput);
+            break;
         }
       }
 
-      switch (attemptResult.kind) {
-        case "green":
-          done = true;
-          break;
-        case "red":
-          failures.push(attemptResult.failureOutput);
-          break;
+      if (done) {
+        writeIssueStatus(issue.path, "done");
+        issue.status = "done";
+        git.commitIssue(issue);
+        const commit = git.head();
+        const filesTouched = git.diffStat(headBefore);
+        const durationMs = Date.now() - startedAt;
+        emit({ type: "issue-committed", issue: number, commit, filesTouched, at: Date.now() });
+        emit({ type: "issue-done", issue: number, attempts, durationMs, at: Date.now() });
+        outcomes.push({ kind: "done", issue: number, attempts, commit, filesTouched, durationMs });
+        doneSummaries.push({ number, title: issue.title, files: filesTouched });
+      } else {
+        git.revertToLastGood();
+        // The revert also wipes earlier uncommitted status writes; restore them.
+        for (const prev of escalatedIssues) writeIssueStatus(prev.path, "ready-for-human");
+        writeIssueStatus(issue.path, "ready-for-human");
+        issue.status = "ready-for-human";
+        escalatedIssues.push(issue);
+        const durationMs = Date.now() - startedAt;
+        emit({ type: "issue-escalated", issue: number, attempts, durationMs, at: Date.now() });
+        outcomes.push({ kind: "escalated", issue: number, attempts, durationMs });
+        escalations += 1;
+        if (escalations > config.budgets.max_escalations_per_run) {
+          emit({
+            type: "run-finished",
+            outcome: "aborted",
+            reason: "escalation-budget-exceeded",
+            escalations,
+            at: Date.now(),
+          });
+          return { kind: "aborted", reason: "escalation-budget-exceeded", outcomes, escalations };
+        }
       }
-    }
-
-    if (done) {
-      writeIssueStatus(issue.path, "done");
-      issue.status = "done";
-      git.commitIssue(issue);
-      const commit = git.head();
-      const filesTouched = git.diffStat(headBefore);
-      const durationMs = Date.now() - startedAt;
-      emit({ type: "issue-committed", issue: number, commit, filesTouched, at: Date.now() });
-      emit({ type: "issue-done", issue: number, attempts, durationMs, at: Date.now() });
-      outcomes.push({ kind: "done", issue: number, attempts, commit, filesTouched, durationMs });
-      doneSummaries.push({ number, title: issue.title, files: filesTouched });
-    } else {
-      git.revertToLastGood();
-      // The revert also wipes earlier uncommitted status writes; restore them.
-      for (const prev of escalatedIssues) writeIssueStatus(prev.path, "ready-for-human");
-      writeIssueStatus(issue.path, "ready-for-human");
+    } catch (error) {
+      // Infrastructure failure (git or status write): degrade, don't die.
+      emit({
+        type: "infrastructure-failure",
+        issue: number,
+        error: error instanceof Error ? error.message : String(error),
+        at: Date.now(),
+      });
+      try {
+        git.revertToLastGood();
+        for (const prev of escalatedIssues) writeIssueStatus(prev.path, "ready-for-human");
+        writeIssueStatus(issue.path, "ready-for-human");
+      } catch {
+        // Even the containment failed: abort the run, never throw.
+        emit({
+          type: "run-finished",
+          outcome: "aborted",
+          reason: "infrastructure-failure",
+          escalations,
+          at: Date.now(),
+        });
+        return { kind: "aborted", reason: "infrastructure-failure", outcomes, escalations };
+      }
       issue.status = "ready-for-human";
       escalatedIssues.push(issue);
       const durationMs = Date.now() - startedAt;

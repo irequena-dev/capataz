@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Config } from "../src/config";
-import { createGit } from "../src/git";
+import { createGit, type Git } from "../src/git";
 import type { InvokeResult } from "../src/invoker";
 import { loadPlan, type Plan } from "../src/plan";
 import { runLoop, type InvokeFn, type RunEvent } from "../src/loop";
@@ -304,6 +304,86 @@ describe("runLoop", () => {
     expect(v.output).toStartWith("[...truncated...]");
     expect(v.output).toContain("TAIL-MARKER");
   }, 10_000);
+
+  test("commit failure is contained: escalates the issue, run continues", async () => {
+    const { repo, plan } = makeFixture([
+      { number: "01", slug: "one", verification: "test -f f1.txt" },
+      { number: "02", slug: "two", verification: "test -f f2.txt" },
+    ]);
+    const real = createGit(repo);
+    const git: Git = {
+      ...real,
+      commitIssue(issue) {
+        if (issue.number === 1) throw new Error("disk full");
+        real.commitIssue(issue);
+      },
+    };
+    const { invoke } = fakeInvoke(repo, {
+      1: () => writeFileSync(join(repo, "f1.txt"), "1"),
+      2: () => writeFileSync(join(repo, "f2.txt"), "2"),
+    });
+    const events: RunEvent[] = [];
+    const result = await runLoop({
+      config: config({ max_escalations_per_run: 2 }),
+      plan,
+      git,
+      repoPath: repo,
+      invokeFn: invoke,
+      onEvent: (e) => events.push(e),
+    });
+
+    expect(result.kind).toBe("completed");
+    expect(result.escalations).toBe(1);
+    expect(statusOf(plan, 1)).toBe("ready-for-human");
+    expect(statusOf(plan, 2)).toBe("done");
+
+    const failure = events.find((e) => e.type === "infrastructure-failure");
+    if (failure?.type !== "infrastructure-failure") throw new Error("no infrastructure-failure");
+    expect(failure.issue).toBe(1);
+    expect(failure.error).toContain("disk full");
+    expect(events.some((e) => e.type === "issue-escalated" && e.issue === 1)).toBe(true);
+
+    // every event survives a JSONL round-trip (report generation works on it)
+    for (const event of events) {
+      expect(JSON.parse(JSON.stringify(event))).toEqual(event);
+    }
+    expect(() => renderReport(events)).not.toThrow();
+  });
+
+  test("revert failure aborts the run with a distinct reason, not an exception", async () => {
+    const { repo, plan } = makeFixture([
+      { number: "01", slug: "red", verification: "false" },
+      { number: "02", slug: "never-runs", verification: "test -f f2.txt" },
+    ]);
+    const real = createGit(repo);
+    const git: Git = {
+      ...real,
+      revertToLastGood() {
+        throw new Error("reset failed");
+      },
+    };
+    const { invoke, prompts } = fakeInvoke(repo, {});
+    const events: RunEvent[] = [];
+    const result = await runLoop({
+      config: config({ max_attempts_per_issue: 1, max_escalations_per_run: 5 }),
+      plan,
+      git,
+      repoPath: repo,
+      invokeFn: invoke,
+      onEvent: (e) => events.push(e),
+    });
+
+    expect(result.kind).toBe("aborted");
+    if (result.kind !== "aborted") throw new Error("unreachable");
+    expect(result.reason).toBe("infrastructure-failure");
+    // issue 2 was never dispatched after the abort
+    expect(prompts.some((p) => p.includes("# Issue: 02"))).toBe(false);
+
+    const finished = events.at(-1);
+    if (finished?.type !== "run-finished") throw new Error("no run-finished");
+    expect(finished.outcome).toBe("aborted");
+    expect(finished.reason).toBe("infrastructure-failure");
+  });
 
   test("runner timeout counts as a failed attempt", async () => {
     const { repo, plan } = makeFixture([

@@ -64,6 +64,9 @@ export function renderReport(events: RunEvent[]): string {
           failureReasons.set(event.issue, firstLine ?? "verification failed");
         }
         break;
+      case "infrastructure-failure":
+        failureReasons.set(event.issue, `infrastructure failure: ${event.error}`);
+        break;
       case "issue-committed":
         row(event.issue).filesTouched = event.filesTouched;
         commits.push({ commit: event.commit, issue: event.issue });
