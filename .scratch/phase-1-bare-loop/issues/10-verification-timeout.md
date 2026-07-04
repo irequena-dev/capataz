@@ -1,6 +1,6 @@
 # 10 — Timeout and output cap for Verification commands
 
-Status: ready-for-agent
+Status: done
 Depends-on: 06
 Verification: bun test tests/loop.test.ts
 

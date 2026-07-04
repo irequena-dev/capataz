@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import type { Backend, Config } from "./config";
 import type { Git } from "./git";
 import { invoke, type InvokeOptions, type InvokeResult } from "./invoker";
@@ -80,17 +81,62 @@ export interface RunLoopDeps {
   only?: number;
 }
 
-async function runVerification(
+/** Max captured verification output; the tail is kept (end of test output). */
+export const VERIFICATION_OUTPUT_CAP = 1_048_576;
+const TRUNCATION_MARK = "[...truncated...]\n";
+
+function capTail(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return TRUNCATION_MARK + text.slice(text.length - (maxLength - TRUNCATION_MARK.length));
+}
+
+function runVerification(
   command: string,
   cwd: string,
+  timeoutMinutes: number,
 ): Promise<{ exitCode: number; output: string }> {
-  const proc = Bun.spawn(["sh", "-c", command], { cwd, stdout: "pipe", stderr: "pipe" });
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
-  const exitCode = await proc.exited;
-  return { exitCode, output: stdout + stderr };
+  return new Promise((resolve) => {
+    const child = spawn("sh", ["-c", command], {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      // Own process group so a timeout can kill the whole tree.
+      detached: true,
+    });
+
+    const chunks: Buffer[] = [];
+    let timedOut = false;
+
+    child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+    child.stderr.on("data", (chunk: Buffer) => chunks.push(chunk));
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      if (child.pid !== undefined) {
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          child.kill("SIGKILL");
+        }
+      }
+    }, timeoutMinutes * 60_000);
+
+    child.on("error", () => {
+      // reported through the close handler via a non-zero exit
+    });
+
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      const output = capTail(Buffer.concat(chunks).toString("utf8"), VERIFICATION_OUTPUT_CAP);
+      if (timedOut) {
+        resolve({
+          exitCode: 1,
+          output: `verification timed out after ${timeoutMinutes}m\n${output}`,
+        });
+      } else {
+        resolve({ exitCode: code ?? 1, output });
+      }
+    });
+  });
 }
 
 type AttemptResult =
@@ -183,7 +229,11 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
         case "ok":
         case "error": {
           // Even if the runner exited non-zero, the Verification command decides.
-          const verified = await runVerification(issue.verification, repoPath);
+          const verified = await runVerification(
+            issue.verification,
+            repoPath,
+            config.budgets.verification_timeout_minutes,
+          );
           emit({
             type: "verification-result",
             issue: number,

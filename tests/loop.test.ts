@@ -7,6 +7,7 @@ import { createGit } from "../src/git";
 import type { InvokeResult } from "../src/invoker";
 import { loadPlan, type Plan } from "../src/plan";
 import { runLoop, type InvokeFn, type RunEvent } from "../src/loop";
+import { renderReport } from "../src/report";
 
 function sh(cwd: string, ...args: string[]): void {
   const proc = Bun.spawnSync(["git", ...args], { cwd });
@@ -61,6 +62,7 @@ function config(budgets?: Partial<Config["budgets"]>): Config {
       max_attempts_per_issue: 2,
       max_escalations_per_run: 2,
       max_audit_issues: 5,
+      verification_timeout_minutes: 1,
       ...budgets,
     },
   };
@@ -244,6 +246,64 @@ describe("runLoop", () => {
     if (finished?.type !== "run-finished") throw new Error("unreachable");
     expect(finished.outcome).toBe("aborted");
   });
+
+  test("hanging verification times out, becomes red attempts, escalates — never hangs", async () => {
+    const { repo, plan } = makeFixture([
+      { number: "01", slug: "hang", verification: "sleep 60" },
+    ]);
+    const git = createGit(repo);
+    const { invoke } = fakeInvoke(repo, {});
+    const events: RunEvent[] = [];
+    const result = await runLoop({
+      config: config({ max_attempts_per_issue: 2, verification_timeout_minutes: 0.005 }),
+      plan,
+      git,
+      repoPath: repo,
+      invokeFn: invoke,
+      onEvent: (e) => events.push(e),
+    });
+
+    expect(result.escalations).toBe(1);
+    expect(statusOf(plan, 1)).toBe("ready-for-human");
+
+    const verifications = events.filter((e) => e.type === "verification-result");
+    expect(verifications).toHaveLength(2);
+    for (const v of verifications) {
+      if (v.type !== "verification-result") throw new Error("unreachable");
+      expect(v.exitCode).not.toBe(0);
+      expect(v.output).toContain("verification timed out after 0.005m");
+    }
+
+    // the timeout is visible in the report as the failure reason
+    expect(renderReport(events)).toContain("verification timed out after 0.005m");
+  }, 10_000);
+
+  test("multi-MB verification output is truncated tail-first to the cap", async () => {
+    const { repo, plan } = makeFixture([
+      {
+        number: "01",
+        slug: "big-output",
+        verification: "yes AAAA | head -c 3000000; echo TAIL-MARKER; false",
+      },
+    ]);
+    const git = createGit(repo);
+    const { invoke } = fakeInvoke(repo, {});
+    const events: RunEvent[] = [];
+    await runLoop({
+      config: config({ max_attempts_per_issue: 1 }),
+      plan,
+      git,
+      repoPath: repo,
+      invokeFn: invoke,
+      onEvent: (e) => events.push(e),
+    });
+
+    const v = events.find((e) => e.type === "verification-result");
+    if (v?.type !== "verification-result") throw new Error("no verification-result event");
+    expect(v.output.length).toBeLessThanOrEqual(1_048_576);
+    expect(v.output).toStartWith("[...truncated...]");
+    expect(v.output).toContain("TAIL-MARKER");
+  }, 10_000);
 
   test("runner timeout counts as a failed attempt", async () => {
     const { repo, plan } = makeFixture([

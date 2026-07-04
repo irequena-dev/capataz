@@ -27,6 +27,7 @@ const ConfigSchema = z.object({
     max_attempts_per_issue: z.number().int().positive(),
     max_escalations_per_run: z.number().int().positive(),
     max_audit_issues: z.number().int().nonnegative(),
+    verification_timeout_minutes: z.number().positive().default(10),
   }),
 });
 

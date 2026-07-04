@@ -16,6 +16,10 @@ exports[`renderReport is a pure function over the event list: snapshot 1`] = `
 | 03 — dependent | skipped | – | – | – |
 | 04 — independent | done | 1 | 0.8s | f4.txt |
 
+## Escalated
+
+- 02 — flaky: assertion failed
+
 ## Skipped
 
 - 03 — dependent: blocked by 02

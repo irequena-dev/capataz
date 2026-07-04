@@ -28,6 +28,7 @@ export function renderReport(events: RunEvent[]): string {
   let escalations = 0;
   const rows = new Map<number, IssueRow>();
   const commits: { commit: string; issue: number }[] = [];
+  const failureReasons = new Map<number, string>();
 
   const row = (issue: number): IssueRow => {
     let existing = rows.get(issue);
@@ -56,7 +57,12 @@ export function renderReport(events: RunEvent[]): string {
         break;
       case "attempt-started":
       case "backend-result":
+        break;
       case "verification-result":
+        if (event.exitCode !== 0) {
+          const firstLine = event.output.split("\n").find((l) => l.trim() !== "");
+          failureReasons.set(event.issue, firstLine ?? "verification failed");
+        }
         break;
       case "issue-committed":
         row(event.issue).filesTouched = event.filesTouched;
@@ -109,6 +115,14 @@ export function renderReport(events: RunEvent[]): string {
         r.filesTouched.join(", ") || "–"
       } |`,
     );
+  }
+
+  const escalated = sortedRows.filter((r) => r.status === "ready-for-human");
+  if (escalated.length > 0) {
+    lines.push("", "## Escalated", "");
+    for (const r of escalated) {
+      lines.push(`- ${r.title}: ${failureReasons.get(r.issue) ?? "see run log"}`);
+    }
   }
 
   const skipped = sortedRows.filter((r) => r.status === "skipped");

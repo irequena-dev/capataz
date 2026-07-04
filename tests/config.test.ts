@@ -87,6 +87,25 @@ roles:
     expect(config.roles.executor).toBe("claude-local");
   });
 
+  test("verification_timeout_minutes defaults when absent and accepts overrides", () => {
+    const home = tmp();
+    const cwd = tmp();
+    const globalConfigPath = writeYaml(home, "config.yaml", validGlobal);
+    const config = loadConfig(cwd, { globalConfigPath });
+    expect(config.budgets.verification_timeout_minutes).toBe(10);
+
+    writeYaml(
+      cwd,
+      "capataz.yaml",
+      `
+budgets:
+  verification_timeout_minutes: 0.5
+`,
+    );
+    const overridden = loadConfig(cwd, { globalConfigPath });
+    expect(overridden.budgets.verification_timeout_minutes).toBe(0.5);
+  });
+
   test("works with only a project config (no global file)", () => {
     const home = tmp();
     const cwd = tmp();
