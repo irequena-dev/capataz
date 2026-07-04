@@ -46,13 +46,15 @@ export function invoke(
       detached: true,
     });
 
-    let stdout = "";
-    let stderr = "";
+    // Collect raw Buffers and decode once at the end, so a multi-byte UTF-8
+    // character split across chunk boundaries is never corrupted.
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
     let timedOut = false;
     let spawnError: Error | undefined;
 
-    child.stdout.on("data", (chunk) => (stdout += chunk));
-    child.stderr.on("data", (chunk) => (stderr += chunk));
+    child.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+    child.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
 
     const timer = setTimeout(() => {
       timedOut = true;
@@ -72,6 +74,8 @@ export function invoke(
     child.on("close", (code) => {
       clearTimeout(timer);
       const durationMs = Date.now() - started;
+      const stdout = Buffer.concat(stdoutChunks).toString("utf8");
+      const stderr = Buffer.concat(stderrChunks).toString("utf8");
       if (timedOut) {
         resolve({ kind: "timeout", stdout, stderr, durationMs });
       } else if (spawnError) {

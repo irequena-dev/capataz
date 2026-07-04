@@ -1,6 +1,6 @@
 # 12 — Invoker stream decoding and top-level error handling
 
-Status: ready-for-agent
+Status: done
 Depends-on: 05
 Verification: bun test tests/invoker.test.ts
 

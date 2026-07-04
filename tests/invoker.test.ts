@@ -31,6 +31,22 @@ describe("invoke", () => {
     expect(result.stdout).toBe("from stdin");
   });
 
+  test("multi-byte character split across two writes is captured intact", async () => {
+    // ñ is \303\261 in UTF-8; flush each byte separately (stdout and stderr)
+    const result = await invoke(
+      backend([
+        "sh",
+        "-c",
+        "printf '\\303'; printf '\\303' >&2; sleep 0.1; printf '\\261'; printf '\\261' >&2",
+      ]),
+      "x",
+      { cwd },
+    );
+    expect(result.kind).toBe("ok");
+    expect(result.stdout).toBe("ñ");
+    expect(result.stderr).toBe("ñ");
+  });
+
   test("non-zero exit yields kind error with exitCode", async () => {
     const result = await invoke(backend(["sh", "-c", "echo oops >&2; exit 3"]), "x", { cwd });
     expect(result.kind).toBe("error");
