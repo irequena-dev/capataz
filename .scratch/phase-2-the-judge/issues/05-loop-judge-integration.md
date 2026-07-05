@@ -1,6 +1,6 @@
 # 05 — Loop: judged flow integration
 
-Status: ready-for-agent
+Status: done
 Depends-on: 01, 02, 03, 04, 06
 Verification: bun test tests/phase2/05-loop-judge.test.ts
 

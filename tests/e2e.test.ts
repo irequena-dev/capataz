@@ -100,7 +100,16 @@ if [ "$n" != "2" ]; then printf 'content %s' "$n" > "f$n.txt"; fi
 
 function runCli(fixture: Fixture, ...extraArgs: string[]) {
   const proc = Bun.spawnSync(
-    [process.execPath, CLI, "run", fixture.planDir, "--repo", fixture.repo, ...extraArgs],
+    [
+      process.execPath,
+      CLI,
+      "run",
+      fixture.planDir,
+      "--repo",
+      fixture.repo,
+      "--no-judge",
+      ...extraArgs,
+    ],
     {
       env: {
         ...process.env,
