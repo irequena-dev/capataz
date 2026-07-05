@@ -1,6 +1,6 @@
 # 03 — Arming module and git extensions
 
-Status: done
+Status: ready-for-human
 Depends-on: 02
 Verification: bun test tests/phase2/03-arming.test.ts
 
