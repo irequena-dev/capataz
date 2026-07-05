@@ -11,6 +11,18 @@ export interface Git {
   diffStat(ref: string): string[];
   /** Current commit hash. */
   head(): string;
+  /** Stage all changes and commit as `capataz: arming <NN>-<slug>`. */
+  commitArming(issue: { number: number; slug: string }): void;
+  /** File paths touched by a single commit. */
+  filesInCommit(ref: string): string[];
+  /** Hard-reset to `ref` and clean untracked files. */
+  resetHardTo(ref: string): void;
+  /** Restore `paths` from `ref`; no-op on empty `paths`. */
+  restoreFiles(ref: string, paths: string[]): void;
+  /** Uncommit the last commit, keeping its changes in the tree and index. */
+  softResetLast(): void;
+  /** Full patch text between `fromRef` and `toRef`. */
+  diffPatch(fromRef: string, toRef: string): string;
 }
 
 export function createGit(repoPath: string): Git {
@@ -71,6 +83,36 @@ export function createGit(repoPath: string): Git {
 
     head() {
       return run("rev-parse", "HEAD").trim();
+    },
+
+    commitArming(issue) {
+      const id = `${String(issue.number).padStart(2, "0")}-${issue.slug}`;
+      run("add", "-A");
+      run("commit", "-m", `capataz: arming ${id}`);
+    },
+
+    filesInCommit(ref) {
+      return run("diff-tree", "--no-commit-id", "--name-only", "-r", ref)
+        .split("\n")
+        .filter((line) => line.trim() !== "");
+    },
+
+    resetHardTo(ref) {
+      run("reset", "--hard", ref);
+      run("clean", "-fd");
+    },
+
+    restoreFiles(ref, paths) {
+      if (paths.length === 0) return;
+      run("checkout", ref, "--", ...paths);
+    },
+
+    softResetLast() {
+      run("reset", "--soft", "HEAD~1");
+    },
+
+    diffPatch(fromRef, toRef) {
+      return run("diff", fromRef, toRef);
     },
   };
 }

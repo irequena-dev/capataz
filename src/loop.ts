@@ -93,7 +93,7 @@ function capTail(text: string, maxLength: number): string {
   return TRUNCATION_MARK + text.slice(text.length - (maxLength - TRUNCATION_MARK.length));
 }
 
-function runVerification(
+export function runVerification(
   command: string,
   cwd: string,
   timeoutMinutes: number,

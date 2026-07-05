@@ -10,6 +10,8 @@ export interface DoneSummary {
   number: number;
   title: string;
   files: string[];
+  /** Optional free-text summary of what the issue did, for the Armorer. */
+  summary?: string;
 }
 
 export interface BuildPromptOptions {
