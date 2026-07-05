@@ -32,7 +32,7 @@ function render(
   armingFiles: string[] = [],
 ): string {
   const parts: string[] = [
-    `You are the Executor. Your job is ONLY this issue. Do not modify tests. Run \`${issue.verification}\` yourself before finishing.`,
+    `You are the Executor. Your job is ONLY this issue. Do not modify tests. Run \`${issue.verification}\` yourself before finishing. NEVER run git commands (commit, branch, reset, stash): capataz verifies and commits your work itself; a commit made by you breaks the run.`,
     `# Issue: ${issue.title}\n\n${issue.body}`,
   ];
   if (armingFiles.length > 0) {

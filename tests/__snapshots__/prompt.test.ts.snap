@@ -1,7 +1,7 @@
 // Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
 exports[`buildPrompt first attempt: snapshot 1`] = `
-"You are the Executor. Your job is ONLY this issue. Do not modify tests. Run \`bun test tests/health.test.ts\` yourself before finishing.
+"You are the Executor. Your job is ONLY this issue. Do not modify tests. Run \`bun test tests/health.test.ts\` yourself before finishing. NEVER run git commands (commit, branch, reset, stash): capataz verifies and commits your work itself; a commit made by you breaks the run.
 
 # Issue: 03 — Add the /health endpoint
 
@@ -18,7 +18,7 @@ Add a GET /health endpoint returning 200 with body \`ok\`.
 `;
 
 exports[`buildPrompt retry attempt with failures: snapshot 1`] = `
-"You are the Executor. Your job is ONLY this issue. Do not modify tests. Run \`bun test tests/health.test.ts\` yourself before finishing.
+"You are the Executor. Your job is ONLY this issue. Do not modify tests. Run \`bun test tests/health.test.ts\` yourself before finishing. NEVER run git commands (commit, branch, reset, stash): capataz verifies and commits your work itself; a commit made by you breaks the run.
 
 # Issue: 03 — Add the /health endpoint
 
