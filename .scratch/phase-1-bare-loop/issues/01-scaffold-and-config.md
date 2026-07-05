@@ -1,6 +1,6 @@
 # 01 — Scaffold Bun project and config loading
 
-Status: ready-for-agent
+Status: done
 Depends-on: none
 Verification: bun test tests/config.test.ts
 

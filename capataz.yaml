@@ -1,0 +1,32 @@
+# Project config (overrides ~/.config/capataz/config.yaml).
+# Backends via Devin CLI. Committed so any machine that clones the repo can
+# run capataz against it (dogfooding) without a global config.
+#
+# NOTES:
+# - devin -p panics when the prompt is piped to stdin; always use the inline
+#   {prompt} placeholder.
+# - permission-mode "smart": auto-approves edits and commands a fast model
+#   judges safe, so the executor can self-run the Verification command.
+
+backends:
+  devin-sonnet:
+    command: ["devin", "--permission-mode", "smart", "--model", "claude-sonnet-5", "-p", "{prompt}"]
+    timeout_minutes: 20
+  devin-glm:
+    command: ["devin", "--permission-mode", "smart", "--model", "glm-5.2", "-p", "{prompt}"]
+    timeout_minutes: 20
+  devin-opus:
+    command: ["devin", "--permission-mode", "smart", "--model", "claude-opus-4.8", "-p", "{prompt}"]
+    timeout_minutes: 30
+  devin-fable:
+    command: ["devin", "--permission-mode", "smart", "--model", "claude-fable-5", "-p", "{prompt}"]
+    timeout_minutes: 30
+
+roles:
+  executor: devin-sonnet
+
+budgets:
+  max_attempts_per_issue: 3
+  max_escalations_per_run: 2
+  max_audit_issues: 5
+  verification_timeout_minutes: 10

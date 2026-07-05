@@ -1,6 +1,6 @@
 # 04 — Git safety manager
 
-Status: ready-for-agent
+Status: done
 Depends-on: 01
 Verification: bun test tests/git.test.ts
 

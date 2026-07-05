@@ -1,0 +1,42 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`buildPrompt first attempt: snapshot 1`] = `
+"You are the Executor. Your job is ONLY this issue. Do not modify tests. Run \`bun test tests/health.test.ts\` yourself before finishing.
+
+# Issue: 03 — Add the /health endpoint
+
+Add a GET /health endpoint returning 200 with body \`ok\`.
+
+## Acceptance criteria
+
+- Returns 200.
+
+## Done so far this run
+
+- 01 — Scaffold server: src/server.ts (+40/-0), package.json (+5/-1)
+- 02 — Add router: src/router.ts (+12/-0)"
+`;
+
+exports[`buildPrompt retry attempt with failures: snapshot 1`] = `
+"You are the Executor. Your job is ONLY this issue. Do not modify tests. Run \`bun test tests/health.test.ts\` yourself before finishing.
+
+# Issue: 03 — Add the /health endpoint
+
+Add a GET /health endpoint returning 200 with body \`ok\`.
+
+## Acceptance criteria
+
+- Returns 200.
+
+## Done so far this run
+
+- 01 — Scaffold server: src/server.ts (+40/-0), package.json (+5/-1)
+- 02 — Add router: src/router.ts (+12/-0)
+
+## Previous failed attempts
+
+### Attempt 1 failed. Verification output (tail):
+
+FAIL tests/health.test.ts
+expected 200, got 404"
+`;

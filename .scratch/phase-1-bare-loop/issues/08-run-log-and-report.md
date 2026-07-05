@@ -1,6 +1,6 @@
 # 08 — Run log and report
 
-Status: ready-for-agent
+Status: done
 Depends-on: 06
 Verification: bun test tests/report.test.ts
 

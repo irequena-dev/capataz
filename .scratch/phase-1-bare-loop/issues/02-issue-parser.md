@@ -1,6 +1,6 @@
 # 02 — Issue file parser and writer
 
-Status: ready-for-agent
+Status: done
 Depends-on: 01
 Verification: bun test tests/issue.test.ts
 

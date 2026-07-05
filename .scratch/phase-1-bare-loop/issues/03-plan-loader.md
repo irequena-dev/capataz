@@ -1,6 +1,6 @@
 # 03 — Plan loader and dependency ordering
 
-Status: ready-for-agent
+Status: done
 Depends-on: 02
 Verification: bun test tests/plan.test.ts
 
