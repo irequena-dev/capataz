@@ -13,6 +13,8 @@ export const ISSUE_STATUSES = [
 
 export type IssueStatus = (typeof ISSUE_STATUSES)[number];
 
+export type IssueArming = "auto" | "none";
+
 export interface Issue {
   number: number;
   slug: string;
@@ -21,6 +23,7 @@ export interface Issue {
   dependsOn: number[];
   /** Required unless the issue is `done`. */
   verification: string | undefined;
+  arming: IssueArming;
   body: string;
   path: string;
 }
@@ -33,6 +36,11 @@ const FILE_NAME_PATTERN = /^(\d+)-(.+)\.md$/;
 const STATUS_LINE = /^Status:\s*(.*)$/;
 const DEPENDS_LINE = /^Depends-on:\s*(.*)$/;
 const VERIFICATION_LINE = /^Verification:\s*(.*)$/;
+const ARMING_LINE = /^Arming:\s*(.*)$/;
+
+function isIssueArming(value: string): value is IssueArming {
+  return value === "auto" || value === "none";
+}
 
 function isIssueStatus(value: string): value is IssueStatus {
   return (ISSUE_STATUSES as readonly string[]).includes(value);
@@ -60,6 +68,7 @@ export function parseIssueFile(path: string): IssueParseResult {
   let status: IssueStatus | undefined;
   let dependsOn: number[] | undefined;
   let verification: string | undefined;
+  let arming: IssueArming | undefined;
   const bodyLines: string[] = [];
   let seenTitle = false;
 
@@ -95,6 +104,13 @@ export function parseIssueFile(path: string): IssueParseResult {
       verification = verificationMatch[1]!.trim();
       continue;
     }
+    const armingMatch = line.match(ARMING_LINE);
+    if (armingMatch && arming === undefined) {
+      const raw = armingMatch[1]!.trim();
+      if (isIssueArming(raw)) arming = raw;
+      else problems.push(`unknown Arming "${raw}"`);
+      continue;
+    }
     bodyLines.push(line);
   }
 
@@ -118,6 +134,7 @@ export function parseIssueFile(path: string): IssueParseResult {
       status,
       dependsOn: dependsOn ?? [],
       verification: verification === "" ? undefined : verification,
+      arming: arming ?? "auto",
       body: bodyLines.join("\n").trim(),
       path,
     },

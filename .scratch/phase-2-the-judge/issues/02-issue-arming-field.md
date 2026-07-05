@@ -1,6 +1,6 @@
 # 02 — Issue parser: Arming field
 
-Status: ready-for-agent
+Status: done
 Depends-on: none
 Verification: bun test tests/phase2/02-issue-arming-field.test.ts
 
