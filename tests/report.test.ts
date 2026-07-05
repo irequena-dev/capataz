@@ -183,11 +183,11 @@ describe("createRunLog", () => {
     const log = createRunLog(planDir);
     for (const event of sampleEvents()) log.onEvent(event);
     const files = readdirSync(log.dir).toSorted();
-    expect(files).toContain("issue-01-attempt-1.txt");
-    expect(files).toContain("issue-02-attempt-1.txt");
-    expect(files).toContain("issue-02-attempt-2.txt");
-    expect(files).toContain("issue-04-attempt-1.txt");
-    const first = readFileSync(join(log.dir, "issue-01-attempt-1.txt"), "utf8");
+    expect(files).toContain("issue-01-attempt-1-executor.txt");
+    expect(files).toContain("issue-02-attempt-1-executor.txt");
+    expect(files).toContain("issue-02-attempt-2-executor.txt");
+    expect(files).toContain("issue-04-attempt-1-executor.txt");
+    const first = readFileSync(join(log.dir, "issue-01-attempt-1-executor.txt"), "utf8");
     expect(first).toContain("did the thing");
   });
 

@@ -1,6 +1,6 @@
 # 07 — Report and run log: verdicts, UNJUDGED banner, arming patches
 
-Status: ready-for-agent
+Status: done
 Depends-on: 05
 Verification: bun test
 
