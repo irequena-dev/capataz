@@ -5,4 +5,4 @@ The red tests for an Issue (the Arming) are written by a different, stronger mod
 ## Consequences
 
 - Planning stays cheap: the frontier Planner writes only prose acceptance criteria; the Armorer (subscription-priced) turns them into tests, so frontier tokens are not spent on test code.
-- If the Armorer misreads a criterion, the Executor will faithfully implement the wrong thing. Mitigation: Arming happens after human plan approval and is committed as the first commit of the run, so it is auditable.
+- If the Armorer misreads a criterion, the Executor will faithfully implement the wrong thing. Mitigation: Arming happens after human plan approval and is committed before the Executor runs, so it is auditable. (Amended by ADR 0003: committed just-in-time per Issue, not as the first commit of the run.)

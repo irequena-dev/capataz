@@ -24,6 +24,13 @@ backends:
 
 roles:
   executor: devin-sonnet
+  planner: devin-fable    
+  armorer: devin-glm
+  reviewer: devin-opus
+  fixer_l2: devin-sonnet
+  fixer_l3: devin-fable
+  architect: devin-opus
+  security_auditor: devin-glm
 
 budgets:
   max_attempts_per_issue: 3

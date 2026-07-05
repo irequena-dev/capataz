@@ -12,8 +12,8 @@ AFK development orchestrator. A frontier model plans a task into a Plan (PRD + s
 human + Planner (interactive: grilling → to-prd → to-issue)
         → Plan in .scratch/<feature>/          ← human approves (HITL gate)
 capataz run <plan-dir>                         ← 100% unattended from here
-        → Armorer writes red tests per Issue (the Arming, committed first)
         → per Issue, in dependency order:
+            Armorer writes red tests (the Arming), committed just-in-time before dispatch
             Executor implements → Verification (command exit code)
             → Reviewer judges diff vs acceptance criteria (rejects if Arming touched)
             → green+approved: commit, next
@@ -52,7 +52,7 @@ L1 Executor retries (with failure feedback) → Fixer L2 → Fixer L3 → `ready
 
 ## Git contract
 
-Branch `capataz/<feature>` per Plan; refuse dirty tree; one commit per verified+reviewed Issue (checkpoints); Arming is the first commit; never push/merge — a run always ends as "branch + report", merging is human.
+Branch `capataz/<feature>` per Plan; refuse dirty tree; per Issue two commits: Arming first, then the verified+reviewed implementation (checkpoints); never push/merge — a run always ends as "branch + report", merging is human.
 
 ## Executor context (anti-lost design for a 9B)
 

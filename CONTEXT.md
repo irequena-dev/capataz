@@ -25,8 +25,12 @@ Role that turns an Issue's acceptance criteria into red tests (the Arming), afte
 _Avoid_: test writer
 
 **Arming**:
-The red tests produced by the Armorer for an Issue. Committed before execution; no other Role may modify them.
+The red tests produced by the Armorer for an Issue. Committed just-in-time, right before its Issue is dispatched; no other Role may modify or delete them.
 _Avoid_: test fixtures, spec tests
+
+**Red-on-arrival**:
+The gate an Arming must pass before its Issue is dispatched: the Issue's Verification must fail. Green on arrival means the tests are vacuous or the feature already exists, and the Issue escalates without dispatching the Executor.
+_Avoid_: sanity check, smoke test
 
 **Executor**:
 Role that executes an Issue inside a Runner: turns the armed tests green. Cannot modify the Arming.
@@ -69,5 +73,9 @@ A markdown subtask with parseable fields (`Status:`, `Depends-on:`, Verification
 _Avoid_: subtask, ticket, task
 
 **Verification**:
-Executable command attached to an Issue whose exit code decides whether the Issue is done.
+Executable command attached to an Issue whose exit code decides whether the Issue is done. Fixed by the Planner and approved by the human; never rewritten at runtime.
 _Avoid_: check, manual validation
+
+**Unjudged run**:
+A run explicitly started without Armorer or Reviewer (per-run opt-out flag, never config). Reproduces the bare phase-1 loop; loudly marked in the report. Exists only for experiments and debugging Capataz itself.
+_Avoid_: fast mode, legacy mode
