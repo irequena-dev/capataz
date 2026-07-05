@@ -57,7 +57,7 @@ function config(budgets?: Partial<Config["budgets"]>): Config {
     backends: {
       fake: { command: ["unused"], env: {}, timeout_minutes: 1 },
     },
-    roles: { executor: "fake" },
+    roles: { executor: "fake", armorer: "fake", reviewer: "fake" },
     budgets: {
       max_attempts_per_issue: 2,
       max_escalations_per_run: 2,

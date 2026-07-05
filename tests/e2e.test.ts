@@ -52,6 +52,8 @@ function makeFixture(issues: FixtureIssue[], backendScript: string): Fixture {
       "    timeout_minutes: 1",
       "roles:",
       "  executor: fake",
+      "  armorer: fake",
+      "  reviewer: fake",
       "budgets:",
       "  max_attempts_per_issue: 2",
       "  max_escalations_per_run: 3",

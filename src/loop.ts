@@ -80,6 +80,8 @@ export interface RunLoopDeps {
   onEvent?: (event: RunEvent) => void;
   /** Run exactly this issue instead of the whole plan (deps must be done). */
   only?: number;
+  /** Escape hatch: skip the judge (armorer/reviewer) roles for this run. */
+  noJudge?: boolean;
 }
 
 /** Max captured verification output; the tail is kept (end of test output). */
