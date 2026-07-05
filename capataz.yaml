@@ -5,21 +5,23 @@
 # NOTES:
 # - devin -p panics when the prompt is piped to stdin; always use the inline
 #   {prompt} placeholder.
-# - permission-mode "smart": auto-approves edits and commands a fast model
-#   judges safe, so the executor can self-run the Verification command.
+# - permission-mode "dangerous" (bypass): no approval prompts, so the runner
+#   can edit files and self-run the Verification command unattended. Capataz
+#   contains the blast radius: branch-only work, verify/commit/revert on its
+#   side. Revisit "autonomous --sandbox" (OS-level scopes) later.
 
 backends:
   devin-sonnet:
-    command: ["devin", "--permission-mode", "smart", "--model", "claude-sonnet-5", "-p", "{prompt}"]
+    command: ["devin", "--permission-mode", "dangerous", "--model", "claude-sonnet-5", "-p", "{prompt}"]
     timeout_minutes: 20
   devin-glm:
-    command: ["devin", "--permission-mode", "smart", "--model", "glm-5.2", "-p", "{prompt}"]
+    command: ["devin", "--permission-mode", "dangerous", "--model", "glm-5.2", "-p", "{prompt}"]
     timeout_minutes: 20
   devin-opus:
-    command: ["devin", "--permission-mode", "smart", "--model", "claude-opus-4.8", "-p", "{prompt}"]
+    command: ["devin", "--permission-mode", "dangerous", "--model", "claude-opus-4.8", "-p", "{prompt}"]
     timeout_minutes: 30
   devin-fable:
-    command: ["devin", "--permission-mode", "smart", "--model", "claude-fable-5", "-p", "{prompt}"]
+    command: ["devin", "--permission-mode", "dangerous", "--model", "claude-fable-5", "-p", "{prompt}"]
     timeout_minutes: 30
 
 roles:
