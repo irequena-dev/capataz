@@ -16,6 +16,8 @@ export interface DoneSummary {
 
 export interface BuildPromptOptions {
   maxChars?: number;
+  /** Armed test files that must not be modified or deleted by the Executor. */
+  armingFiles?: string[];
 }
 
 interface SelectedFailure {
@@ -23,11 +25,22 @@ interface SelectedFailure {
   output: string;
 }
 
-function render(issue: Issue, summaryLines: string[], failures: SelectedFailure[]): string {
+function render(
+  issue: Issue,
+  summaryLines: string[],
+  failures: SelectedFailure[],
+  armingFiles: string[] = [],
+): string {
   const parts: string[] = [
     `You are the Executor. Your job is ONLY this issue. Do not modify tests. Run \`${issue.verification}\` yourself before finishing.`,
     `# Issue: ${issue.title}\n\n${issue.body}`,
   ];
+  if (armingFiles.length > 0) {
+    const fileLines = armingFiles.map((f) => `- ${f}`).join("\n");
+    parts.push(
+      `## Armed tests (do not modify or delete)\n\nModifying or deleting any of these files fails the Issue automatically.\n\n${fileLines}`,
+    );
+  }
   if (summaryLines.length > 0) {
     parts.push(`## Done so far this run\n\n${summaryLines.join("\n")}`);
   }
@@ -58,6 +71,7 @@ export function buildPrompt(
   options: BuildPromptOptions = {},
 ): string {
   const maxChars = options.maxChars ?? MAX_PROMPT_CHARS;
+  const armingFiles = options.armingFiles ?? [];
 
   // Failures first (newest→oldest): retry feedback matters more than old summaries.
   const selectedFailures: SelectedFailure[] = [];
@@ -67,13 +81,13 @@ export function buildPrompt(
       output: tail(attemptFailures[i]!, FAILURE_TAIL_CHARS),
     };
     const attempt = [candidate, ...selectedFailures];
-    if (render(issue, [], attempt).length <= maxChars) {
+    if (render(issue, [], attempt, armingFiles).length <= maxChars) {
       selectedFailures.unshift(candidate);
       continue;
     }
     if (selectedFailures.length === 0) {
       // Newest failure alone does not fit: tail-truncate it harder.
-      const overflow = render(issue, [], attempt).length - maxChars;
+      const overflow = render(issue, [], attempt, armingFiles).length - maxChars;
       const room = candidate.output.length - overflow;
       if (room > TRUNCATION_MARK.length) {
         candidate.output = tail(candidate.output, room);
@@ -87,11 +101,13 @@ export function buildPrompt(
   const summaryLines: string[] = [];
   for (let i = doneSummaries.length - 1; i >= 0; i--) {
     const s = doneSummaries[i]!;
-    const line = `- ${s.title}: ${s.files.join(", ")}`;
+    const line = s.summary
+      ? `- ${s.title}: ${s.summary} (${s.files.join(", ")})`
+      : `- ${s.title}: ${s.files.join(", ")}`;
     const attempt = [line, ...summaryLines];
-    if (render(issue, attempt, selectedFailures).length > maxChars) break;
+    if (render(issue, attempt, selectedFailures, armingFiles).length > maxChars) break;
     summaryLines.unshift(line);
   }
 
-  return render(issue, summaryLines, selectedFailures);
+  return render(issue, summaryLines, selectedFailures, armingFiles);
 }

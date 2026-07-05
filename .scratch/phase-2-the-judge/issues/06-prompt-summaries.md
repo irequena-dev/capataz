@@ -1,6 +1,6 @@
 # 06 — Prompt: Reviewer summaries and Arming protection line
 
-Status: ready-for-agent
+Status: done
 Depends-on: none
 Verification: bun test tests/phase2/06-prompt-summaries.test.ts
 
