@@ -5,20 +5,22 @@ import { runLoop } from "./loop";
 import { loadPlan } from "./plan";
 import { createRunLog } from "./report";
 
-const USAGE = "Usage: capataz run <plan-dir> [--issue NN] [--repo <path>]";
+const USAGE = "Usage: capataz run <plan-dir> [--issue NN] [--repo <path>] [--no-judge]";
 
 interface CliArgs {
   planDir: string;
   repo: string;
   issue: number | undefined;
+  noJudge: boolean;
 }
 
-function parseArgs(argv: string[]): CliArgs {
+export function parseArgs(argv: string[]): CliArgs {
   const [command, ...rest] = argv;
   if (command !== "run") throw new Error(USAGE);
   let planDir: string | undefined;
   let repo = process.cwd();
   let issue: number | undefined;
+  let noJudge = false;
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i]!;
     if (arg === "--issue") {
@@ -29,6 +31,8 @@ function parseArgs(argv: string[]): CliArgs {
       const value = rest[++i];
       if (!value) throw new Error(`--repo needs a path\n${USAGE}`);
       repo = value;
+    } else if (arg === "--no-judge") {
+      noJudge = true;
     } else if (planDir === undefined) {
       planDir = arg;
     } else {
@@ -36,7 +40,7 @@ function parseArgs(argv: string[]): CliArgs {
     }
   }
   if (!planDir) throw new Error(USAGE);
-  return { planDir: resolve(planDir), repo: resolve(repo), issue };
+  return { planDir: resolve(planDir), repo: resolve(repo), issue, noJudge };
 }
 
 export async function main(argv: string[]): Promise<number> {
@@ -66,6 +70,7 @@ export async function main(argv: string[]): Promise<number> {
       repoPath: args.repo,
       onEvent: runLog.onEvent,
       only: args.issue,
+      noJudge: args.noJudge,
     });
     const reportPath = runLog.writeReport();
 

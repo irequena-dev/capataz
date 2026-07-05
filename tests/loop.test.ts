@@ -57,7 +57,7 @@ function config(budgets?: Partial<Config["budgets"]>): Config {
     backends: {
       fake: { command: ["unused"], env: {}, timeout_minutes: 1 },
     },
-    roles: { executor: "fake" },
+    roles: { executor: "fake", armorer: "fake", reviewer: "fake" },
     budgets: {
       max_attempts_per_issue: 2,
       max_escalations_per_run: 2,
@@ -122,6 +122,7 @@ describe("runLoop", () => {
       repoPath: repo,
       invokeFn: invoke,
       onEvent: (e) => events.push(e),
+      noJudge: true,
     });
 
     expect(result.kind).toBe("completed");
@@ -176,6 +177,7 @@ describe("runLoop", () => {
       repoPath: repo,
       invokeFn: invoke,
       onEvent: (e) => events.push(e),
+      noJudge: true,
     });
 
     expect(result.kind).toBe("completed");
@@ -228,6 +230,7 @@ describe("runLoop", () => {
       repoPath: repo,
       invokeFn: invoke,
       onEvent: (e) => events.push(e),
+      noJudge: true,
     });
 
     expect(result.kind).toBe("aborted");
@@ -261,6 +264,7 @@ describe("runLoop", () => {
       repoPath: repo,
       invokeFn: invoke,
       onEvent: (e) => events.push(e),
+      noJudge: true,
     });
 
     expect(result.escalations).toBe(1);
@@ -296,6 +300,7 @@ describe("runLoop", () => {
       repoPath: repo,
       invokeFn: invoke,
       onEvent: (e) => events.push(e),
+      noJudge: true,
     });
 
     const v = events.find((e) => e.type === "verification-result");
@@ -330,6 +335,7 @@ describe("runLoop", () => {
       repoPath: repo,
       invokeFn: invoke,
       onEvent: (e) => events.push(e),
+      noJudge: true,
     });
 
     expect(result.kind).toBe("completed");
@@ -371,6 +377,7 @@ describe("runLoop", () => {
       repoPath: repo,
       invokeFn: invoke,
       onEvent: (e) => events.push(e),
+      noJudge: true,
     });
 
     expect(result.kind).toBe("aborted");
@@ -403,6 +410,7 @@ describe("runLoop", () => {
       git,
       repoPath: repo,
       invokeFn: invoke,
+      noJudge: true,
     });
     expect(result.escalations).toBe(1);
     expect(statusOf(plan, 1)).toBe("ready-for-human");

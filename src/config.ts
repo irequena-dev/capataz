@@ -11,9 +11,9 @@ const BackendSchema = z.object({
 
 const RolesSchema = z.strictObject({
   planner: z.string().optional(),
-  armorer: z.string().optional(),
+  armorer: z.string(),
   executor: z.string(),
-  reviewer: z.string().optional(),
+  reviewer: z.string(),
   fixer_l2: z.string().optional(),
   fixer_l3: z.string().optional(),
   architect: z.string().optional(),
@@ -29,6 +29,7 @@ const ConfigSchema = z.object({
     max_audit_issues: z.number().int().nonnegative(),
     verification_timeout_minutes: z.number().positive().default(10),
   }),
+  suite_command: z.string().optional(),
 });
 
 export type Backend = z.infer<typeof BackendSchema>;

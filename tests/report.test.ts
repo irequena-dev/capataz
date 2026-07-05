@@ -10,11 +10,12 @@ const t0 = 1_750_000_000_000;
 /** A full happy+sad run: 01 done, 02 escalated, 03 skipped (dependent), 04 done. */
 function sampleEvents(): RunEvent[] {
   return [
-    { type: "run-started", feature: "toy-feature", at: t0 },
+    { type: "run-started", feature: "toy-feature", judged: true, at: t0 },
     { type: "issue-started", issue: 1, title: "01 — scaffold", at: t0 + 1_000 },
     { type: "attempt-started", issue: 1, attempt: 1, at: t0 + 1_100 },
     {
       type: "backend-result",
+      role: "executor",
       issue: 1,
       attempt: 1,
       backend: "fake",
@@ -46,6 +47,7 @@ function sampleEvents(): RunEvent[] {
     { type: "attempt-started", issue: 2, attempt: 1, at: t0 + 4_100 },
     {
       type: "backend-result",
+      role: "executor",
       issue: 2,
       attempt: 1,
       backend: "fake",
@@ -68,6 +70,7 @@ function sampleEvents(): RunEvent[] {
     { type: "attempt-started", issue: 2, attempt: 2, at: t0 + 5_300 },
     {
       type: "backend-result",
+      role: "executor",
       issue: 2,
       attempt: 2,
       backend: "fake",
@@ -84,6 +87,7 @@ function sampleEvents(): RunEvent[] {
     { type: "attempt-started", issue: 4, attempt: 1, at: t0 + 66_100 },
     {
       type: "backend-result",
+      role: "executor",
       issue: 4,
       attempt: 1,
       backend: "fake",
@@ -135,7 +139,7 @@ describe("renderReport", () => {
 
   test("aborted run is reported with its reason", () => {
     const events: RunEvent[] = [
-      { type: "run-started", feature: "toy-feature", at: t0 },
+      { type: "run-started", feature: "toy-feature", judged: true, at: t0 },
       {
         type: "run-finished",
         outcome: "aborted",
@@ -179,11 +183,11 @@ describe("createRunLog", () => {
     const log = createRunLog(planDir);
     for (const event of sampleEvents()) log.onEvent(event);
     const files = readdirSync(log.dir).toSorted();
-    expect(files).toContain("issue-01-attempt-1.txt");
-    expect(files).toContain("issue-02-attempt-1.txt");
-    expect(files).toContain("issue-02-attempt-2.txt");
-    expect(files).toContain("issue-04-attempt-1.txt");
-    const first = readFileSync(join(log.dir, "issue-01-attempt-1.txt"), "utf8");
+    expect(files).toContain("issue-01-attempt-1-executor.txt");
+    expect(files).toContain("issue-02-attempt-1-executor.txt");
+    expect(files).toContain("issue-02-attempt-2-executor.txt");
+    expect(files).toContain("issue-04-attempt-1-executor.txt");
+    const first = readFileSync(join(log.dir, "issue-01-attempt-1-executor.txt"), "utf8");
     expect(first).toContain("did the thing");
   });
 

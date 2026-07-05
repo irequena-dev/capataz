@@ -23,6 +23,8 @@ backends:
     timeout_minutes: 10
 roles:
   executor: claude-local
+  armorer: claude-local
+  reviewer: claude-local
 budgets:
   max_attempts_per_issue: 3
   max_escalations_per_run: 2
@@ -162,6 +164,8 @@ backends:
     timeout_minutes: 10
 roles:
   executor: ghost-backend
+  armorer: claude-local
+  reviewer: claude-local
 budgets:
   max_attempts_per_issue: 3
   max_escalations_per_run: 2

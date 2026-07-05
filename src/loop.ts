@@ -1,10 +1,12 @@
 import { spawn } from "node:child_process";
+import { armIssue } from "./arming";
 import type { Backend, Config } from "./config";
 import type { Git } from "./git";
 import { invoke, type InvokeOptions, type InvokeResult } from "./invoker";
 import { writeIssueStatus, type Issue } from "./issue";
 import { blockedBy, type Plan } from "./plan";
 import { buildPrompt, type DoneSummary } from "./prompt";
+import { reviewIssue } from "./review";
 
 export type InvokeFn = (
   backend: Backend,
@@ -13,7 +15,7 @@ export type InvokeFn = (
 ) => Promise<InvokeResult>;
 
 export type RunEvent =
-  | { type: "run-started"; feature: string; at: number }
+  | { type: "run-started"; feature: string; judged: boolean; at: number }
   | { type: "issue-started"; issue: number; title: string; at: number }
   | { type: "attempt-started"; issue: number; attempt: number; at: number }
   | {
@@ -21,6 +23,7 @@ export type RunEvent =
       issue: number;
       attempt: number;
       backend: string;
+      role: "executor" | "armorer" | "reviewer";
       kind: InvokeResult["kind"];
       exitCode: number | undefined;
       durationMs: number;
@@ -42,6 +45,31 @@ export type RunEvent =
   | { type: "issue-escalated"; issue: number; attempts: number; durationMs: number; at: number }
   | { type: "issue-skipped"; issue: number; title: string; blockedBy: number[]; at: number }
   | { type: "infrastructure-failure"; issue: number; error: string; at: number }
+  | { type: "arming-started"; issue: number; at: number }
+  | { type: "arming-committed"; issue: number; commit: string; files: string[]; at: number }
+  | { type: "arming-failed"; issue: number; reason: string; at: number }
+  | { type: "arming-skipped"; issue: number; reason: "none" | "no-judge"; at: number }
+  | {
+      type: "suite-result";
+      issue: number;
+      attempt: number;
+      command: string;
+      exitCode: number;
+      output: string;
+      at: number;
+    }
+  | { type: "arming-violation"; issue: number; attempt: number; files: string[]; at: number }
+  | {
+      type: "review-result";
+      issue: number;
+      attempt: number;
+      verdict: "approve" | "reject";
+      summary?: string;
+      reason?: string;
+      at: number;
+    }
+  | { type: "reviewer-dirty-tree"; issue: number; attempt: number; at: number }
+  | { type: "arming-patch"; issue: number; patch: string; at: number }
   | {
       type: "run-finished";
       outcome: "completed" | "aborted";
@@ -80,6 +108,8 @@ export interface RunLoopDeps {
   onEvent?: (event: RunEvent) => void;
   /** Run exactly this issue instead of the whole plan (deps must be done). */
   only?: number;
+  /** Escape hatch: skip the judge (armorer/reviewer) roles for this run. */
+  noJudge?: boolean;
 }
 
 /** Max captured verification output; the tail is kept (end of test output). */
@@ -91,7 +121,7 @@ function capTail(text: string, maxLength: number): string {
   return TRUNCATION_MARK + text.slice(text.length - (maxLength - TRUNCATION_MARK.length));
 }
 
-function runVerification(
+export function runVerification(
   command: string,
   cwd: string,
   timeoutMinutes: number,
@@ -144,14 +174,64 @@ type AttemptResult =
   | { kind: "green" }
   | { kind: "red"; failureOutput: string };
 
+function isTreeClean(repoPath: string): boolean {
+  const status = Bun.spawnSync(["git", "status", "--porcelain"], { cwd: repoPath });
+  return status.stdout.toString().trim() === "";
+}
+
+/** Files changed or deleted in the working tree relative to HEAD (`git diff --name-only HEAD`). */
+function changedFilesSinceHead(repoPath: string): string[] {
+  const proc = Bun.spawnSync(["git", "diff", "--name-only", "HEAD"], { cwd: repoPath });
+  return proc.stdout
+    .toString()
+    .split("\n")
+    .filter((line) => line.trim() !== "");
+}
+
+/** Wrap `invokeFn` so every call also emits a `backend-result` event for the given role. */
+function invokeAndEmit(
+  invokeFn: InvokeFn,
+  emit: (event: RunEvent) => void,
+  role: "armorer" | "reviewer",
+  backendName: string,
+  issueNumber: number,
+): InvokeFn {
+  let attempt = 0;
+  return async (backend, prompt, options) => {
+    attempt += 1;
+    const invoked = await invokeFn(backend, prompt, options);
+    emit({
+      type: "backend-result",
+      issue: issueNumber,
+      attempt,
+      backend: backendName,
+      role,
+      kind: invoked.kind,
+      exitCode: invoked.kind === "timeout" ? undefined : invoked.exitCode,
+      durationMs: invoked.durationMs,
+      stdout: invoked.stdout,
+      stderr: invoked.stderr,
+      at: Date.now(),
+    });
+    return invoked;
+  };
+}
+
 export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
   const { config, plan, git, repoPath } = deps;
   const invokeFn = deps.invokeFn ?? invoke;
   const emit = (event: RunEvent) => deps.onEvent?.(event);
+  const judged = !deps.noJudge;
 
   const executorName = config.roles.executor;
   const executor = config.backends[executorName];
   if (!executor) throw new Error(`Executor backend "${executorName}" not found in config`);
+  const armorerName = config.roles.armorer;
+  const armorer = config.backends[armorerName];
+  if (!armorer) throw new Error(`Armorer backend "${armorerName}" not found in config`);
+  const reviewerName = config.roles.reviewer;
+  const reviewerBackend = config.backends[reviewerName];
+  if (!reviewerBackend) throw new Error(`Reviewer backend "${reviewerName}" not found in config`);
 
   const outcomes: IssueOutcome[] = [];
   const doneSummaries: DoneSummary[] = [];
@@ -164,7 +244,7 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
     order = [deps.only];
   }
 
-  emit({ type: "run-started", feature: plan.feature, at: Date.now() });
+  emit({ type: "run-started", feature: plan.feature, judged, at: Date.now() });
 
   for (const number of order) {
     const issue = plan.issues.get(number)!;
@@ -194,6 +274,8 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
     const failures: string[] = [];
     let done = false;
     let attempts = 0;
+    let pre: string | undefined;
+    let armingCommit: string | undefined;
 
     try {
       // Guaranteed by the plan loader for non-done issues.
@@ -201,22 +283,61 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
       if (verification === undefined) {
         throw new Error(`Issue ${number} has no Verification command`);
       }
-      const headBefore = git.head();
+      pre = git.head();
       emit({ type: "issue-started", issue: number, title: issue.title, at: startedAt });
       writeIssueStatus(issue.path, "in-progress");
       issue.status = "in-progress";
 
-      while (attempts < config.budgets.max_attempts_per_issue && !done) {
+      let armingFiles: string[] = [];
+      let armingFailed: string | undefined;
+
+      if (!judged) {
+        emit({ type: "arming-skipped", issue: number, reason: "no-judge", at: Date.now() });
+      } else if (issue.arming === "none") {
+        emit({ type: "arming-skipped", issue: number, reason: "none", at: Date.now() });
+      } else {
+        emit({ type: "arming-started", issue: number, at: Date.now() });
+        const armResult = await armIssue({
+          issue,
+          backend: armorer,
+          git,
+          repoPath,
+          invokeFn: invokeAndEmit(invokeFn, emit, "armorer", armorerName, number),
+          verificationTimeoutMinutes: config.budgets.verification_timeout_minutes,
+          maxAttempts: config.budgets.max_attempts_per_issue,
+          doneSummaries,
+        });
+        attempts = armResult.attemptsUsed;
+        if (armResult.kind === "armed") {
+          armingCommit = armResult.commit;
+          armingFiles = armResult.files;
+          emit({
+            type: "arming-committed",
+            issue: number,
+            commit: armResult.commit,
+            files: armResult.files,
+            at: Date.now(),
+          });
+        } else {
+          armingFailed = armResult.reason;
+          emit({ type: "arming-failed", issue: number, reason: armResult.reason, at: Date.now() });
+        }
+      }
+
+      const baseForImpl = git.head();
+
+      while (armingFailed === undefined && attempts < config.budgets.max_attempts_per_issue && !done) {
         attempts += 1;
         emit({ type: "attempt-started", issue: number, attempt: attempts, at: Date.now() });
 
-        const prompt = buildPrompt(issue, doneSummaries, failures);
+        const prompt = buildPrompt(issue, doneSummaries, failures, { armingFiles });
         const invoked = await invokeFn(executor, prompt, { cwd: repoPath });
         emit({
           type: "backend-result",
           issue: number,
           attempt: attempts,
           backend: executorName,
+          role: "executor",
           kind: invoked.kind,
           exitCode: invoked.kind === "timeout" ? undefined : invoked.exitCode,
           durationMs: invoked.durationMs,
@@ -250,10 +371,104 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
               output: verified.output,
               at: Date.now(),
             });
-            attemptResult =
-              verified.exitCode === 0
-                ? { kind: "green" }
-                : { kind: "red", failureOutput: verified.output };
+            if (verified.exitCode !== 0) {
+              attemptResult = { kind: "red", failureOutput: verified.output };
+              break;
+            }
+
+            if (config.suite_command) {
+              const suite = await runVerification(
+                config.suite_command,
+                repoPath,
+                config.budgets.verification_timeout_minutes,
+              );
+              emit({
+                type: "suite-result",
+                issue: number,
+                attempt: attempts,
+                command: config.suite_command,
+                exitCode: suite.exitCode,
+                output: suite.output,
+                at: Date.now(),
+              });
+              if (suite.exitCode !== 0) {
+                attemptResult = {
+                  kind: "red",
+                  failureOutput: `The full suite command regressed (not just this issue's verification):\n${suite.output}`,
+                };
+                break;
+              }
+            }
+
+            if (!judged) {
+              writeIssueStatus(issue.path, "done");
+              issue.status = "done";
+              git.commitIssue(issue);
+              attemptResult = { kind: "green" };
+              break;
+            }
+
+            const changed = changedFilesSinceHead(repoPath);
+            const violated = changed.filter((f) => armingFiles.includes(f));
+            if (violated.length > 0) {
+              git.restoreFiles("HEAD", armingFiles);
+              emit({ type: "arming-violation", issue: number, attempt: attempts, files: violated, at: Date.now() });
+              attemptResult = {
+                kind: "red",
+                failureOutput: `Modified or deleted armed test file(s), which is not allowed: ${violated.join(", ")}. These have been restored from HEAD.`,
+              };
+              break;
+            }
+
+            const commitBefore = git.head();
+            writeIssueStatus(issue.path, "done");
+            issue.status = "done";
+            git.commitIssue(issue);
+            const diff = git.diffPatch(commitBefore, "HEAD");
+            const reviewResult = await reviewIssue({
+              issue,
+              backend: reviewerBackend,
+              repoPath,
+              invokeFn: invokeAndEmit(invokeFn, emit, "reviewer", reviewerName, number),
+              diff,
+              armingFiles,
+            });
+
+            if (!isTreeClean(repoPath)) {
+              git.revertToLastGood();
+              emit({ type: "reviewer-dirty-tree", issue: number, attempt: attempts, at: Date.now() });
+            }
+
+            if (reviewResult.kind === "approve") {
+              emit({
+                type: "review-result",
+                issue: number,
+                attempt: attempts,
+                verdict: "approve",
+                summary: reviewResult.summary,
+                at: Date.now(),
+              });
+              doneSummaries.push({
+                number,
+                title: issue.title,
+                files: git.diffStat(baseForImpl),
+                summary: reviewResult.summary,
+              });
+              attemptResult = { kind: "green" };
+            } else {
+              emit({
+                type: "review-result",
+                issue: number,
+                attempt: attempts,
+                verdict: "reject",
+                reason: reviewResult.reason,
+                at: Date.now(),
+              });
+              git.softResetLast();
+              writeIssueStatus(issue.path, "in-progress");
+              issue.status = "in-progress";
+              attemptResult = { kind: "red", failureOutput: reviewResult.reason };
+            }
             break;
           }
         }
@@ -269,18 +484,25 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
       }
 
       if (done) {
-        writeIssueStatus(issue.path, "done");
-        issue.status = "done";
-        git.commitIssue(issue);
         const commit = git.head();
-        const filesTouched = git.diffStat(headBefore);
+        const filesTouched = git.diffStat(baseForImpl);
         const durationMs = Date.now() - startedAt;
         emit({ type: "issue-committed", issue: number, commit, filesTouched, at: Date.now() });
         emit({ type: "issue-done", issue: number, attempts, durationMs, at: Date.now() });
         outcomes.push({ kind: "done", issue: number, attempts, commit, filesTouched, durationMs });
-        doneSummaries.push({ number, title: issue.title, files: filesTouched });
+        if (judged) {
+          // The reviewer's summary was already recorded into doneSummaries on approve.
+        } else {
+          doneSummaries.push({ number, title: issue.title, files: filesTouched });
+        }
       } else {
-        git.revertToLastGood();
+        if (armingCommit !== undefined) {
+          const patch = git.diffPatch(pre, armingCommit);
+          emit({ type: "arming-patch", issue: number, patch, at: Date.now() });
+          git.resetHardTo(pre);
+        } else {
+          git.revertToLastGood();
+        }
         // The revert also wipes earlier uncommitted status writes; restore them.
         for (const prev of escalatedIssues) writeIssueStatus(prev.path, "ready-for-human");
         writeIssueStatus(issue.path, "ready-for-human");
@@ -310,7 +532,11 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
         at: Date.now(),
       });
       try {
-        git.revertToLastGood();
+        if (armingCommit !== undefined && pre !== undefined) {
+          git.resetHardTo(pre);
+        } else {
+          git.revertToLastGood();
+        }
         for (const prev of escalatedIssues) writeIssueStatus(prev.path, "ready-for-human");
         writeIssueStatus(issue.path, "ready-for-human");
       } catch {

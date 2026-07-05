@@ -52,6 +52,8 @@ function makeFixture(issues: FixtureIssue[], backendScript: string): Fixture {
       "    timeout_minutes: 1",
       "roles:",
       "  executor: fake",
+      "  armorer: fake",
+      "  reviewer: fake",
       "budgets:",
       "  max_attempts_per_issue: 2",
       "  max_escalations_per_run: 3",
@@ -98,7 +100,16 @@ if [ "$n" != "2" ]; then printf 'content %s' "$n" > "f$n.txt"; fi
 
 function runCli(fixture: Fixture, ...extraArgs: string[]) {
   const proc = Bun.spawnSync(
-    [process.execPath, CLI, "run", fixture.planDir, "--repo", fixture.repo, ...extraArgs],
+    [
+      process.execPath,
+      CLI,
+      "run",
+      fixture.planDir,
+      "--repo",
+      fixture.repo,
+      "--no-judge",
+      ...extraArgs,
+    ],
     {
       env: {
         ...process.env,
