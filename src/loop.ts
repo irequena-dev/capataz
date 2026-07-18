@@ -1,11 +1,14 @@
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { armIssue } from "./arming";
+import { parseFindings, writeAuditIssues, type Auditor, type Finding } from "./audit";
 import type { Backend, Config } from "./config";
 import type { Git } from "./git";
 import { invoke, type InvokeOptions, type InvokeResult } from "./invoker";
-import { writeIssueStatus, type Issue } from "./issue";
+import { writeIssueStatus, type Issue, type IssueStatus } from "./issue";
 import { blockedBy, type Plan } from "./plan";
-import { buildFixerPrompt, buildPrompt, type DoneSummary } from "./prompt";
+import { buildAuditPrompt, buildFixerPrompt, buildPrompt, type DoneSummary } from "./prompt";
 import { reviewIssue } from "./review";
 
 export type InvokeFn = (
@@ -88,6 +91,22 @@ export type RunEvent =
     }
   | { type: "reviewer-dirty-tree"; issue: number; attempt: number; at: number }
   | { type: "arming-patch"; issue: number; patch: string; at: number }
+  | { type: "audit-started"; auditors: Auditor[]; at: number }
+  | {
+      type: "auditor-result";
+      role: Auditor;
+      backend: string;
+      kind: InvokeResult["kind"];
+      exitCode: number | undefined;
+      durationMs: number;
+      stdout: string;
+      stderr: string;
+      at: number;
+    }
+  | { type: "finding-emitted"; auditor: Auditor; title: string; dispatchable: boolean; at: number }
+  | { type: "audit-issue-written"; issue: number; auditor: Auditor; status: IssueStatus; at: number }
+  | { type: "rogue-audit-edit"; role: Auditor; from: string; to: string; at: number }
+  | { type: "audit-input-truncated"; role: Auditor; at: number }
   | {
       type: "run-finished";
       outcome: "completed" | "aborted";
@@ -290,9 +309,114 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
     order = [deps.only];
   }
 
+  const runBase = git.head();
   emit({ type: "run-started", feature: plan.feature, judged, at: Date.now() });
 
-  for (const number of order) {
+  // The Audit phase: only after a judged full pass (every Issue of the Plan
+  // `done`) with at least one auditor role configured. Sequential, best-effort
+  // auditor invocations; returns the dispatchable audit-Issue numbers.
+  const auditPhase = async (): Promise<number[]> => {
+    if (!judged) return [];
+    if (![...plan.issues.values()].every((i) => i.status === "done")) return [];
+    const auditors: { role: Auditor; backendName: string; backend: Backend }[] = [];
+    for (const role of ["architect", "security_auditor"] as const) {
+      const backendName = config.roles[role];
+      if (backendName === undefined) continue;
+      const backend = config.backends[backendName];
+      if (!backend) throw new Error(`Auditor backend "${backendName}" not found in config`);
+      auditors.push({ role, backendName, backend });
+    }
+    if (auditors.length === 0) return [];
+
+    emit({ type: "audit-started", auditors: auditors.map((a) => a.role), at: Date.now() });
+    const prd = readFileSync(join(plan.dir, "PRD.md"), "utf8");
+    const diff = git.diffPatch(runBase, "HEAD");
+    const findings: Finding[] = [];
+    let dispatched = 0;
+    for (const { role, backendName, backend } of auditors) {
+      const { prompt, truncated } = buildAuditPrompt({ role, prd, diff });
+      if (truncated) emit({ type: "audit-input-truncated", role, at: Date.now() });
+      const preInvoke = git.head();
+      let invoked: InvokeResult;
+      try {
+        invoked = await invokeFn(backend, prompt, { cwd: repoPath });
+      } catch (error) {
+        invoked = {
+          kind: "error",
+          stdout: "",
+          stderr: error instanceof Error ? error.message : String(error),
+          durationMs: 0,
+          exitCode: undefined,
+        };
+      }
+      emit({
+        type: "auditor-result",
+        role,
+        backend: backendName,
+        kind: invoked.kind,
+        exitCode: invoked.kind === "timeout" ? undefined : invoked.exitCode,
+        durationMs: invoked.durationMs,
+        stdout: invoked.stdout,
+        stderr: invoked.stderr,
+        at: Date.now(),
+      });
+      // Read-only guard: auditor edits and commits are discarded wholesale;
+      // Findings live in the invocation output, never in the tree.
+      const postInvoke = git.head();
+      if (postInvoke !== preInvoke || !isTreeClean(repoPath)) {
+        git.resetHardTo(preInvoke);
+        emit({ type: "rogue-audit-edit", role, from: preInvoke, to: postInvoke, at: Date.now() });
+      }
+      for (const finding of parseFindings(invoked.stdout, role)) {
+        const dispatchable =
+          finding.verification !== undefined && dispatched < config.budgets.max_audit_issues;
+        if (dispatchable) dispatched += 1;
+        emit({
+          type: "finding-emitted",
+          auditor: finding.auditor,
+          title: finding.title,
+          dispatchable,
+          at: Date.now(),
+        });
+        findings.push(finding);
+      }
+    }
+    if (findings.length === 0) return [];
+
+    const written = writeAuditIssues(findings, {
+      issuesDir: join(plan.dir, "issues"),
+      maxAuditIssues: config.budgets.max_audit_issues,
+    });
+    git.commitAudit();
+    // Numbers are assigned in emission order, so sorting pairs issues back
+    // with their findings.
+    const byNumber = [...written.dispatchable, ...written.triage].toSorted(
+      (a, b) => a.number - b.number,
+    );
+    for (const [i, auditIssue] of byNumber.entries()) {
+      emit({
+        type: "audit-issue-written",
+        issue: auditIssue.number,
+        auditor: findings[i]!.auditor,
+        status: auditIssue.status,
+        at: Date.now(),
+      });
+    }
+    for (const auditIssue of written.dispatchable) plan.issues.set(auditIssue.number, auditIssue);
+    return written.dispatchable.map((i) => i.number);
+  };
+
+  // Walk the Plan's Issues, then — single pass — the dispatchable audit-Issues.
+  let pending = [...order];
+  let audited = false;
+  while (true) {
+    const number = pending.shift();
+    if (number === undefined) {
+      if (audited) break;
+      audited = true;
+      pending = await auditPhase();
+      continue;
+    }
     const issue = plan.issues.get(number)!;
     if (issue.status === "done") continue;
 

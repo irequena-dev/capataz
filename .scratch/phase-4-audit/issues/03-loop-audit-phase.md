@@ -1,6 +1,6 @@
 # 03 — Loop: the Audit phase
 
-Status: ready-for-agent
+Status: done
 Depends-on: 1, 2
 Verification: bun test tests/phase4/03-loop-audit-phase.test.ts
 
