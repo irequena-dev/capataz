@@ -45,9 +45,13 @@ export function loadPlan(dir: string): PlanLoadResult {
   }
 
   for (const issue of issues.values()) {
-    if (issue.status !== "done" && issue.verification === undefined) {
+    if (
+      issue.status !== "done" &&
+      issue.status !== "needs-triage" &&
+      issue.verification === undefined
+    ) {
       problems.push(
-        `issue ${issue.number}: missing Verification: command (required unless done)`,
+        `issue ${issue.number}: missing Verification: command (required unless done or needs-triage)`,
       );
     }
     for (const dep of issue.dependsOn) {
