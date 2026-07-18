@@ -1,6 +1,6 @@
 # 01 — Findings: format, parser, audit-Issue writer
 
-Status: ready-for-agent
+Status: done
 Depends-on: none
 Verification: bun test tests/phase4/01-findings.test.ts
 
