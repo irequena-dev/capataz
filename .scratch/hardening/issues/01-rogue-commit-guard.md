@@ -1,8 +1,14 @@
 # 01 — Loop: contain runner-made commits (rogue commit guard)
 
-Status: needs-triage
+Status: done
 Depends-on: none
 Verification: bun test
+
+Triage: option 2 (tolerant). A rogue commit is soft-reset back to the
+pre-invocation head so the work stays in the tree and passes through the normal
+gates (verification, arming check, review, commit) — a green attempt is never
+wasted. `commitIssue` also treats a clean index as a no-op, so a stray
+already-committed change never reads as an infrastructure failure.
 
 Found during the phase-2 run: the Issue-03 executor ran `git commit` itself
 (dangerous permission mode). Capataz's own `commitIssue` then failed with

@@ -3,7 +3,7 @@ import type { Backend } from "./config";
 import type { Git } from "./git";
 import type { Issue } from "./issue";
 import type { InvokeFn } from "./loop";
-import { runVerification } from "./loop";
+import { isTreeClean, runVerification } from "./loop";
 import type { DoneSummary } from "./prompt";
 
 export interface ArmIssueDeps {
@@ -54,11 +54,6 @@ export function buildArmorerPrompt(
   }
 
   return parts.join("\n\n");
-}
-
-function isTreeClean(repoPath: string): boolean {
-  const status = Bun.spawnSync(["git", "status", "--porcelain"], { cwd: repoPath });
-  return status.stdout.toString().trim() === "";
 }
 
 export async function armIssue(deps: ArmIssueDeps): Promise<ArmIssueResult> {

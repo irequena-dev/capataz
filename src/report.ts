@@ -70,7 +70,9 @@ export function renderReport(events: RunEvent[]): string {
     switch (event.type) {
       case "run-started":
         feature = event.feature;
-        judged = event.judged;
+        // Older (phase-1) logs have no `judged` field; treat them as judged so
+        // a replay never renders a false UNJUDGED banner.
+        judged = event.judged ?? true;
         break;
       case "issue-started":
         row(event.issue).title = event.title;
