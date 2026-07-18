@@ -9,16 +9,16 @@ exports[`renderReport is a pure function over the event list: snapshot 1`] = `
 
 ## Issues
 
-| Issue | Status | Verdict | Attempts | Duration | Files touched |
-| ----- | ------ | ------- | -------- | -------- | ------------- |
-| 01 — scaffold | done | – | 1 | 2.3s | f1.txt, src/a.ts |
-| 02 — flaky | ready-for-human | – | 2 | 61.3s | – |
-| 03 — dependent | skipped | – | – | – | – |
-| 04 — independent | done | – | 1 | 0.8s | f4.txt |
+| Issue | Status | Verdict | Attempts | Duration | Resolved by | Files touched |
+| ----- | ------ | ------- | -------- | -------- | ----------- | ------------- |
+| 01 — scaffold | done | – | 1 | 2.3s | l1 | f1.txt, src/a.ts |
+| 02 — flaky | ready-for-human | – | 2 | 61.3s | – | – |
+| 03 — dependent | skipped | – | – | – | – | – |
+| 04 — independent | done | – | 1 | 0.8s | l1 | f4.txt |
 
 ## Escalated
 
-- 02 — flaky: assertion failed
+- 02 — flaky: assertion failed — exhausted l1
 
 ## Skipped
 
