@@ -1,6 +1,6 @@
 # 01 — Config: per-rung attempt budgets
 
-Status: ready-for-agent
+Status: done
 Depends-on: none
 Verification: bun test tests/phase3/01-config-budget-ladder.test.ts
 

@@ -27,6 +27,7 @@ roles:
   reviewer: claude-local
 budgets:
   max_attempts_per_issue: 3
+  attempts_l1: 3
   max_escalations_per_run: 2
   max_audit_issues: 5
 `;
@@ -144,6 +145,7 @@ backends:
 roles: {}
 budgets:
   max_attempts_per_issue: 3
+  attempts_l1: 3
   max_escalations_per_run: 2
   max_audit_issues: 5
 `,
@@ -168,6 +170,7 @@ roles:
   reviewer: claude-local
 budgets:
   max_attempts_per_issue: 3
+  attempts_l1: 3
   max_escalations_per_run: 2
   max_audit_issues: 5
 `,

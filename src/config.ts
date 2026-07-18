@@ -23,12 +23,20 @@ const RolesSchema = z.strictObject({
 const ConfigSchema = z.object({
   backends: z.record(z.string(), BackendSchema),
   roles: RolesSchema,
-  budgets: z.object({
-    max_attempts_per_issue: z.number().int().positive(),
-    max_escalations_per_run: z.number().int().positive(),
-    max_audit_issues: z.number().int().nonnegative(),
-    verification_timeout_minutes: z.number().positive().default(10),
-  }),
+  budgets: z
+    .object({
+      max_attempts_per_issue: z.number().int().positive(),
+      attempts_l1: z.number().int().positive(),
+      attempts_l2: z.number().int().positive().default(2),
+      attempts_l3: z.number().int().positive().default(2),
+      max_escalations_per_run: z.number().int().positive(),
+      max_audit_issues: z.number().int().nonnegative(),
+      verification_timeout_minutes: z.number().positive().default(10),
+    })
+    .refine((b) => b.max_attempts_per_issue >= b.attempts_l1, {
+      message: "max_attempts_per_issue must be >= attempts_l1",
+      path: ["max_attempts_per_issue"],
+    }),
   suite_command: z.string().optional(),
 });
 

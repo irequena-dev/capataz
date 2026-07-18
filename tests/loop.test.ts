@@ -60,6 +60,9 @@ function config(budgets?: Partial<Config["budgets"]>): Config {
     roles: { executor: "fake", armorer: "fake", reviewer: "fake" },
     budgets: {
       max_attempts_per_issue: 2,
+      attempts_l1: 2,
+      attempts_l2: 2,
+      attempts_l3: 2,
       max_escalations_per_run: 2,
       max_audit_issues: 5,
       verification_timeout_minutes: 1,
