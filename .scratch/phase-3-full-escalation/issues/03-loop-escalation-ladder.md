@@ -1,6 +1,6 @@
 # 03 — Loop: climb the Escalation ladder
 
-Status: ready-for-agent
+Status: done
 Depends-on: 01, 02
 Verification: bun test tests/phase3/03-loop-escalation-ladder.test.ts
 

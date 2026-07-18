@@ -5,7 +5,7 @@ import type { Git } from "./git";
 import { invoke, type InvokeOptions, type InvokeResult } from "./invoker";
 import { writeIssueStatus, type Issue } from "./issue";
 import { blockedBy, type Plan } from "./plan";
-import { buildPrompt, type DoneSummary } from "./prompt";
+import { buildFixerPrompt, buildPrompt, type DoneSummary } from "./prompt";
 import { reviewIssue } from "./review";
 
 export type InvokeFn = (
@@ -14,16 +14,18 @@ export type InvokeFn = (
   options: InvokeOptions,
 ) => Promise<InvokeResult>;
 
+export type Rung = "l1" | "l2" | "l3";
+
 export type RunEvent =
   | { type: "run-started"; feature: string; judged: boolean; at: number }
   | { type: "issue-started"; issue: number; title: string; at: number }
-  | { type: "attempt-started"; issue: number; attempt: number; at: number }
+  | { type: "attempt-started"; issue: number; attempt: number; rung: Rung; at: number }
   | {
       type: "backend-result";
       issue: number;
       attempt: number;
       backend: string;
-      role: "executor" | "armorer" | "reviewer";
+      role: "executor" | "armorer" | "reviewer" | "fixer_l2" | "fixer_l3";
       kind: InvokeResult["kind"];
       exitCode: number | undefined;
       durationMs: number;
@@ -41,7 +43,22 @@ export type RunEvent =
       at: number;
     }
   | { type: "issue-committed"; issue: number; commit: string; filesTouched: string[]; at: number }
-  | { type: "issue-done"; issue: number; attempts: number; durationMs: number; at: number }
+  | {
+      type: "issue-done";
+      issue: number;
+      attempts: number;
+      resolvedBy: Rung;
+      durationMs: number;
+      at: number;
+    }
+  | {
+      type: "rung-promoted";
+      issue: number;
+      from: "l1" | "l2";
+      to: "l2" | "l3";
+      attemptsUsed: number;
+      at: number;
+    }
   | { type: "issue-escalated"; issue: number; attempts: number; durationMs: number; at: number }
   | { type: "issue-skipped"; issue: number; title: string; blockedBy: number[]; at: number }
   | { type: "infrastructure-failure"; issue: number; error: string; at: number }
@@ -234,6 +251,34 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
   const reviewerBackend = config.backends[reviewerName];
   if (!reviewerBackend) throw new Error(`Reviewer backend "${reviewerName}" not found in config`);
 
+  // The Escalation ladder: L1 (Executor) plus each configured fixer rung.
+  interface LadderRung {
+    rung: Rung;
+    role: "executor" | "fixer_l2" | "fixer_l3";
+    backendName: string;
+    backend: Backend;
+    budget: number;
+  }
+  const ladder: LadderRung[] = [
+    {
+      rung: "l1",
+      role: "executor",
+      backendName: executorName,
+      backend: executor,
+      budget: config.budgets.attempts_l1,
+    },
+  ];
+  for (const [rung, role, budget] of [
+    ["l2", "fixer_l2", config.budgets.attempts_l2],
+    ["l3", "fixer_l3", config.budgets.attempts_l3],
+  ] as const) {
+    const backendName = config.roles[role];
+    if (backendName === undefined) continue;
+    const backend = config.backends[backendName];
+    if (!backend) throw new Error(`Fixer backend "${backendName}" not found in config`);
+    ladder.push({ rung, role, backendName, backend, budget });
+  }
+
   const outcomes: IssueOutcome[] = [];
   const doneSummaries: DoneSummary[] = [];
   const escalatedIssues: Issue[] = [];
@@ -328,7 +373,7 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
           repoPath,
           invokeFn: invokeAndEmit(invokeFn, emit, "armorer", armorerName, number),
           verificationTimeoutMinutes: config.budgets.verification_timeout_minutes,
-          maxAttempts: config.budgets.max_attempts_per_issue,
+          maxAttempts: config.budgets.attempts_l1,
           doneSummaries,
         });
         attempts = armResult.attemptsUsed;
@@ -350,13 +395,44 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
 
       const baseForImpl = git.head();
 
-      while (armingFailed === undefined && attempts < config.budgets.max_attempts_per_issue && !done) {
-        attempts += 1;
-        emit({ type: "attempt-started", issue: number, attempt: attempts, at: Date.now() });
+      let rungIndex = 0;
+      let rungAttempts = attempts; // arming shares L1's budget
+      let resolvedBy: Rung = "l1";
 
-        const prompt = buildPrompt(issue, doneSummaries, failures, { armingFiles });
+      while (armingFailed === undefined && !done) {
+        const current = ladder[rungIndex]!;
+        if (attempts >= config.budgets.max_attempts_per_issue) break;
+        if (rungAttempts >= current.budget) {
+          const next = ladder[rungIndex + 1];
+          if (next === undefined) break;
+          emit({
+            type: "rung-promoted",
+            issue: number,
+            from: current.rung as "l1" | "l2",
+            to: next.rung as "l2" | "l3",
+            attemptsUsed: attempts,
+            at: Date.now(),
+          });
+          rungIndex += 1;
+          rungAttempts = 0;
+          continue;
+        }
+        attempts += 1;
+        rungAttempts += 1;
+        emit({
+          type: "attempt-started",
+          issue: number,
+          attempt: attempts,
+          rung: current.rung,
+          at: Date.now(),
+        });
+
+        const prompt =
+          current.rung === "l1"
+            ? buildPrompt(issue, doneSummaries, failures, { armingFiles })
+            : buildFixerPrompt(issue, doneSummaries, failures, { armingFiles });
         const preInvoke = git.head();
-        const invoked = await invokeFn(executor, prompt, { cwd: repoPath });
+        const invoked = await invokeFn(current.backend, prompt, { cwd: repoPath });
         // Rogue-commit guard: capataz owns version control. If the runner
         // committed on its own (dangerous permission mode), un-commit back to
         // where we were, keeping the work in the tree so the normal gates
@@ -377,8 +453,8 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
           type: "backend-result",
           issue: number,
           attempt: attempts,
-          backend: executorName,
-          role: "executor",
+          backend: current.backendName,
+          role: current.role,
           kind: invoked.kind,
           exitCode: invoked.kind === "timeout" ? undefined : invoked.exitCode,
           durationMs: invoked.durationMs,
@@ -517,6 +593,7 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
         switch (attemptResult.kind) {
           case "green":
             done = true;
+            resolvedBy = current.rung;
             break;
           case "red":
             failures.push(attemptResult.failureOutput);
@@ -529,7 +606,7 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
         const filesTouched = git.diffStat(baseForImpl);
         const durationMs = Date.now() - startedAt;
         emit({ type: "issue-committed", issue: number, commit, filesTouched, at: Date.now() });
-        emit({ type: "issue-done", issue: number, attempts, durationMs, at: Date.now() });
+        emit({ type: "issue-done", issue: number, attempts, resolvedBy, durationMs, at: Date.now() });
         outcomes.push({ kind: "done", issue: number, attempts, commit, filesTouched, durationMs });
         // Judged runs already recorded the reviewer's summary on approve; only
         // the unjudged path needs a mechanical (title + files) summary.
