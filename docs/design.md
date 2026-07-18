@@ -9,7 +9,7 @@ AFK development orchestrator. A frontier model plans a task into a Plan (PRD + s
 ## The flow
 
 ```
-human + Planner (interactive: grilling → to-prd → to-issue)
+human + Planner (interactive: grilling → to-spec → to-tickets; wayfinder for giant tasks)
         → Plan in .scratch/<feature>/          ← human approves (HITL gate)
 capataz run <plan-dir>                         ← 100% unattended from here
         → per Issue, in dependency order:
