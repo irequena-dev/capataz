@@ -21,7 +21,7 @@ export interface Issue {
   title: string;
   status: IssueStatus;
   dependsOn: number[];
-  /** Required unless the issue is `done`. */
+  /** Required unless the issue is `done` or `needs-triage`. */
   verification: string | undefined;
   arming: IssueArming;
   body: string;
@@ -117,7 +117,11 @@ export function parseIssueFile(path: string): IssueParseResult {
   if (status === undefined && !problems.some((p) => p.startsWith("unknown status"))) {
     problems.push("missing Status: line");
   }
-  if ((verification === undefined || verification === "") && status !== "done") {
+  if (
+    (verification === undefined || verification === "") &&
+    status !== "done" &&
+    status !== "needs-triage"
+  ) {
     problems.push("missing Verification: command");
   }
 
