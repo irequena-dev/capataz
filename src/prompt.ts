@@ -25,16 +25,22 @@ interface SelectedFailure {
   output: string;
 }
 
+function executorFraming(issue: Issue): string {
+  return `You are the Executor. Your job is ONLY this issue. Do not modify tests. Run \`${issue.verification}\` yourself before finishing. NEVER run git commands (commit, branch, reset, stash): capataz verifies and commits your work itself; a commit made by you breaks the run.`;
+}
+
+function fixerFraming(issue: Issue): string {
+  return `You are a Fixer. A previous model attempted this issue and failed; its partial work is already in the working tree. Your job is to repair that work — not reimplement from scratch — until the Verification command passes. Work ONLY on this issue. Never modify or delete the armed test files. Run \`${issue.verification}\` yourself before finishing. NEVER run git commands (commit, branch, reset, stash): capataz verifies and commits your work itself; a commit made by you breaks the run.`;
+}
+
 function render(
   issue: Issue,
   summaryLines: string[],
   failures: SelectedFailure[],
   armingFiles: string[] = [],
+  framing: (issue: Issue) => string = executorFraming,
 ): string {
-  const parts: string[] = [
-    `You are the Executor. Your job is ONLY this issue. Do not modify tests. Run \`${issue.verification}\` yourself before finishing. NEVER run git commands (commit, branch, reset, stash): capataz verifies and commits your work itself; a commit made by you breaks the run.`,
-    `# Issue: ${issue.title}\n\n${issue.body}`,
-  ];
+  const parts: string[] = [framing(issue), `# Issue: ${issue.title}\n\n${issue.body}`];
   if (armingFiles.length > 0) {
     const fileLines = armingFiles.map((f) => `- ${f}`).join("\n");
     parts.push(
@@ -70,6 +76,30 @@ export function buildPrompt(
   attemptFailures: string[],
   options: BuildPromptOptions = {},
 ): string {
+  return assemble(issue, doneSummaries, attemptFailures, options, executorFraming);
+}
+
+/**
+ * Fixer dispatch prompt: repair framing over the same assembly as
+ * `buildPrompt` (issue body never truncated, done summaries and failure
+ * history dropped oldest-first to fit the cap).
+ */
+export function buildFixerPrompt(
+  issue: Issue,
+  doneSummaries: DoneSummary[],
+  attemptFailures: string[],
+  options: BuildPromptOptions = {},
+): string {
+  return assemble(issue, doneSummaries, attemptFailures, options, fixerFraming);
+}
+
+function assemble(
+  issue: Issue,
+  doneSummaries: DoneSummary[],
+  attemptFailures: string[],
+  options: BuildPromptOptions,
+  framing: (issue: Issue) => string,
+): string {
   const maxChars = options.maxChars ?? MAX_PROMPT_CHARS;
   const armingFiles = options.armingFiles ?? [];
 
@@ -81,13 +111,13 @@ export function buildPrompt(
       output: tail(attemptFailures[i]!, FAILURE_TAIL_CHARS),
     };
     const attempt = [candidate, ...selectedFailures];
-    if (render(issue, [], attempt, armingFiles).length <= maxChars) {
+    if (render(issue, [], attempt, armingFiles, framing).length <= maxChars) {
       selectedFailures.unshift(candidate);
       continue;
     }
     if (selectedFailures.length === 0) {
       // Newest failure alone does not fit: tail-truncate it harder.
-      const overflow = render(issue, [], attempt, armingFiles).length - maxChars;
+      const overflow = render(issue, [], attempt, armingFiles, framing).length - maxChars;
       const room = candidate.output.length - overflow;
       if (room > TRUNCATION_MARK.length) {
         candidate.output = tail(candidate.output, room);
@@ -105,9 +135,9 @@ export function buildPrompt(
       ? `- ${s.title}: ${s.summary} (${s.files.join(", ")})`
       : `- ${s.title}: ${s.files.join(", ")}`;
     const attempt = [line, ...summaryLines];
-    if (render(issue, attempt, selectedFailures, armingFiles).length > maxChars) break;
+    if (render(issue, attempt, selectedFailures, armingFiles, framing).length > maxChars) break;
     summaryLines.unshift(line);
   }
 
-  return render(issue, summaryLines, selectedFailures, armingFiles);
+  return render(issue, summaryLines, selectedFailures, armingFiles, framing);
 }

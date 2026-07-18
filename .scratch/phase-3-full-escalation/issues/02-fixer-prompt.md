@@ -1,6 +1,6 @@
 # 02 — Fixer prompt: repair framing
 
-Status: ready-for-agent
+Status: done
 Depends-on: none
 Verification: bun test tests/phase3/02-fixer-prompt.test.ts
 
