@@ -1,6 +1,9 @@
 {
   "name": "capataz",
   "module": "index.ts",
+  "bin": {
+    "capataz": "index.ts"
+  },
   "type": "module",
   "private": true,
   "devDependencies": {

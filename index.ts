@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 import { main } from "./src/cli";
 
 function die(error: unknown): never {
