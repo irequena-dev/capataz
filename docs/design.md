@@ -46,7 +46,7 @@ L1 Executor retries (with failure feedback) → Fixer L2 → Fixer L3 → `ready
 ## Budgets (config, enforced from day 1)
 
 1. Timeout per Role invocation.
-2. Max attempts per Issue across the whole ladder.
+2. Per-rung attempts (`attempts_l1`/`attempts_l2`/`attempts_l3`, phase 3) plus `max_attempts_per_issue` as global total across the whole ladder.
 3. Max `ready-for-human` escalations per run → abort run.
 4. Cap on Audit-generated Issues.
 
