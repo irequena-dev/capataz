@@ -1,12 +1,13 @@
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { RunEvent } from "./loop";
+import type { Rung, RunEvent } from "./loop";
 
 interface IssueRow {
   issue: number;
   title: string;
   status: "done" | "ready-for-human" | "skipped";
   attempts: number | undefined;
+  resolvedBy: Rung | undefined;
   durationMs: number | undefined;
   filesTouched: string[];
   blockedBy: number[];
@@ -39,6 +40,8 @@ export function renderReport(events: RunEvent[]): string {
   const verdicts = new Map<number, "approve" | "reject">();
   const armingRows = new Map<number, ArmingRow>();
   const armingPatches = new Map<number, string>();
+  const promotions: { issue: number; from: string; to: Rung; attemptsUsed: number }[] = [];
+  const lastRung = new Map<number, Rung>();
 
   const row = (issue: number): IssueRow => {
     let existing = rows.get(issue);
@@ -48,6 +51,7 @@ export function renderReport(events: RunEvent[]): string {
         title: `${nn(issue)}`,
         status: "skipped",
         attempts: undefined,
+        resolvedBy: undefined,
         durationMs: undefined,
         filesTouched: [],
         blockedBy: [],
@@ -125,8 +129,19 @@ export function renderReport(events: RunEvent[]): string {
         r.status = "done";
         r.attempts = event.attempts;
         r.durationMs = event.durationMs;
+        // Phase-2 logs predate resolvedBy; everything ran at l1 then.
+        r.resolvedBy = event.resolvedBy ?? "l1";
         break;
       }
+      case "rung-promoted":
+        promotions.push({
+          issue: event.issue,
+          from: event.from,
+          to: event.to,
+          attemptsUsed: event.attemptsUsed,
+        });
+        lastRung.set(event.issue, event.to);
+        break;
       case "issue-escalated": {
         const r = row(event.issue);
         r.status = "ready-for-human";
@@ -163,15 +178,22 @@ export function renderReport(events: RunEvent[]): string {
     "",
     "## Issues",
     "",
-    "| Issue | Status | Verdict | Attempts | Duration | Files touched |",
-    "| ----- | ------ | ------- | -------- | -------- | ------------- |",
+    "| Issue | Status | Verdict | Attempts | Duration | Resolved by | Files touched |",
+    "| ----- | ------ | ------- | -------- | -------- | ----------- | ------------- |",
   );
   for (const r of sortedRows) {
     lines.push(
-      `| ${r.title} | ${r.status} | ${verdicts.get(r.issue) ?? "–"} | ${r.attempts ?? "–"} | ${formatDuration(r.durationMs)} | ${
+      `| ${r.title} | ${r.status} | ${verdicts.get(r.issue) ?? "–"} | ${r.attempts ?? "–"} | ${formatDuration(r.durationMs)} | ${r.resolvedBy ?? "–"} | ${
         r.filesTouched.join(", ") || "–"
       } |`,
     );
+  }
+
+  if (promotions.length > 0) {
+    lines.push("", "## Escalation ladder", "");
+    for (const p of promotions) {
+      lines.push(`- ${row(p.issue).title}: ${p.from} → ${p.to} (after ${p.attemptsUsed} attempts)`);
+    }
   }
 
   const sortedArmingRows = [...armingRows.values()].toSorted((a, b) => a.issue - b.issue);
@@ -188,7 +210,10 @@ export function renderReport(events: RunEvent[]): string {
     for (const r of escalated) {
       const patch = armingPatches.get(r.issue);
       const patchSuffix = patch ? ` — arming saved to ${patch}` : "";
-      lines.push(`- ${r.title}: ${failureReasons.get(r.issue) ?? "see run log"}${patchSuffix}`);
+      const rung = lastRung.get(r.issue) ?? "l1";
+      lines.push(
+        `- ${r.title}: ${failureReasons.get(r.issue) ?? "see run log"} — exhausted ${rung}${patchSuffix}`,
+      );
     }
   }
 

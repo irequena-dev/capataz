@@ -1,6 +1,6 @@
 # 04 — Report: attribute Issues to the rung that resolved them
 
-Status: ready-for-agent
+Status: done
 Depends-on: 03
 Verification: bun test tests/phase3/04-report-ladder.test.ts
 
