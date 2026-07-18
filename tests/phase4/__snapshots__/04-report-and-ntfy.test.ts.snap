@@ -1,0 +1,38 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`report: Audit section full audit run: snapshot 1`] = `
+"# Capataz run report — toy-feature
+
+- Outcome: completed
+- Branch: capataz/toy-feature
+- Escalations: 0
+- Notification: sent
+
+## Issues
+
+| Issue | Status | Verdict | Attempts | Duration | Resolved by | Files touched |
+| ----- | ------ | ------- | -------- | -------- | ----------- | ------------- |
+| 01 — scaffold | done | – | 1 | 0.2s | l1 | f1.txt |
+| 02 — arch-gap (audit) | done | – | 1 | 0.1s | l2 | fix.ts |
+
+## Audit
+
+- architect: ok — 2 finding(s)
+- security_auditor: timed out — 0 finding(s)
+
+### Findings
+
+- [architect] Arch gap
+- [architect] Vague worry (not dispatched)
+
+### Audit-issues
+
+- 02 — arch-gap [architect]: done by l2
+- 03 [architect]: needs-triage
+
+## Commits
+
+- abc1234 — 01 — scaffold
+- 9876543 — 02 — arch-gap
+"
+`;

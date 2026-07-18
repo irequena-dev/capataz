@@ -20,6 +20,11 @@ const RolesSchema = z.strictObject({
   security_auditor: z.string().optional(),
 });
 
+const NotifySchema = z.strictObject({
+  ntfy_topic: z.string(),
+  ntfy_server: z.string().default("https://ntfy.sh"),
+});
+
 const ConfigSchema = z.object({
   backends: z.record(z.string(), BackendSchema),
   roles: RolesSchema,
@@ -38,10 +43,12 @@ const ConfigSchema = z.object({
       path: ["max_attempts_per_issue"],
     }),
   suite_command: z.string().optional(),
+  notify: NotifySchema.optional(),
 });
 
 export type Backend = z.infer<typeof BackendSchema>;
 export type Role = keyof z.infer<typeof RolesSchema>;
+export type NotifyConfig = z.infer<typeof NotifySchema>;
 export type Config = z.infer<typeof ConfigSchema>;
 
 export interface LoadConfigOptions {

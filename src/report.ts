@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { Auditor } from "./audit";
 import type { Rung, RunEvent } from "./loop";
 
 interface IssueRow {
@@ -15,6 +16,21 @@ interface IssueRow {
 
 interface ArmingRow {
   issue: number;
+  title: string;
+  status: string;
+}
+
+interface AuditorRow {
+  role: Auditor;
+  outcome: string;
+  findings: number;
+  rogueEdit: boolean;
+  inputTruncated: boolean;
+}
+
+interface AuditIssue {
+  issue: number;
+  auditor: Auditor;
   title: string;
   status: string;
 }
@@ -42,6 +58,11 @@ export function renderReport(events: RunEvent[]): string {
   const armingPatches = new Map<number, string>();
   const promotions: { issue: number; from: string; to: Rung; attemptsUsed: number }[] = [];
   const lastRung = new Map<number, Rung>();
+  let auditStarted = false;
+  const auditorRows = new Map<Auditor, AuditorRow>();
+  const findings: { auditor: Auditor; title: string; dispatchable: boolean }[] = [];
+  const auditIssues = new Map<number, AuditIssue>();
+  let notification: { ok: boolean; error?: string } | undefined;
 
   const row = (issue: number): IssueRow => {
     let existing = rows.get(issue);
@@ -156,11 +177,61 @@ export function renderReport(events: RunEvent[]): string {
         r.blockedBy = event.blockedBy;
         break;
       }
+      case "audit-started":
+        auditStarted = true;
+        for (const role of event.auditors) {
+          auditorRows.set(role, {
+            role,
+            outcome: "did not run",
+            findings: 0,
+            rogueEdit: false,
+            inputTruncated: false,
+          });
+        }
+        break;
+      case "auditor-result": {
+        const ar = auditorRows.get(event.role);
+        if (ar) ar.outcome = event.kind === "timeout" ? "timed out" : event.kind;
+        break;
+      }
+      case "finding-emitted": {
+        findings.push({ auditor: event.auditor, title: event.title, dispatchable: event.dispatchable });
+        const ar = auditorRows.get(event.auditor);
+        if (ar) ar.findings += 1;
+        break;
+      }
+      case "audit-issue-written":
+        auditIssues.set(event.issue, {
+          issue: event.issue,
+          auditor: event.auditor,
+          title: nn(event.issue),
+          status: event.status,
+        });
+        break;
+      case "rogue-audit-edit": {
+        const ar = auditorRows.get(event.role);
+        if (ar) ar.rogueEdit = true;
+        break;
+      }
+      case "audit-input-truncated": {
+        const ar = auditorRows.get(event.role);
+        if (ar) ar.inputTruncated = true;
+        break;
+      }
+      case "notification-result":
+        notification = { ok: event.ok, error: event.error };
+        break;
       case "run-finished":
         outcome = event.reason ? `${event.outcome} (${event.reason})` : event.outcome;
         escalations = event.escalations;
         break;
     }
+  }
+
+  // Titles for dispatched audit-Issues come from their issue-started events.
+  for (const auditIssue of auditIssues.values()) {
+    const r = rows.get(auditIssue.issue);
+    if (r) auditIssue.title = r.title;
   }
 
   const sortedRows = [...rows.values()].toSorted((a, b) => a.issue - b.issue);
@@ -171,10 +242,21 @@ export function renderReport(events: RunEvent[]): string {
       "",
     );
   }
+  lines.push(`- Outcome: ${outcome}`, `- Branch: capataz/${feature}`, `- Escalations: ${escalations}`);
+  if (!auditStarted) {
+    const fullPass =
+      sortedRows.length > 0 && sortedRows.every((r) => r.status === "done") && escalations === 0;
+    const why = !judged ? "unjudged run" : fullPass ? "no auditors configured" : "no full pass";
+    lines.push(`- Audit: skipped (${why})`);
+  }
+  if (notification !== undefined) {
+    lines.push(
+      notification.ok
+        ? "- Notification: sent"
+        : `- Notification: failed (${notification.error ?? "unknown error"})`,
+    );
+  }
   lines.push(
-    `- Outcome: ${outcome}`,
-    `- Branch: capataz/${feature}`,
-    `- Escalations: ${escalations}`,
     "",
     "## Issues",
     "",
@@ -182,11 +264,44 @@ export function renderReport(events: RunEvent[]): string {
     "| ----- | ------ | ------- | -------- | -------- | ----------- | ------------- |",
   );
   for (const r of sortedRows) {
+    const marker = auditIssues.has(r.issue) ? " (audit)" : "";
     lines.push(
-      `| ${r.title} | ${r.status} | ${verdicts.get(r.issue) ?? "–"} | ${r.attempts ?? "–"} | ${formatDuration(r.durationMs)} | ${r.resolvedBy ?? "–"} | ${
+      `| ${r.title}${marker} | ${r.status} | ${verdicts.get(r.issue) ?? "–"} | ${r.attempts ?? "–"} | ${formatDuration(r.durationMs)} | ${r.resolvedBy ?? "–"} | ${
         r.filesTouched.join(", ") || "–"
       } |`,
     );
+  }
+
+  if (auditStarted) {
+    lines.push("", "## Audit", "");
+    for (const ar of auditorRows.values()) {
+      const notes = [
+        ...(ar.inputTruncated ? ["input truncated"] : []),
+        ...(ar.rogueEdit ? ["rogue edit reverted"] : []),
+      ];
+      const suffix = notes.length > 0 ? ` (${notes.join(", ")})` : "";
+      lines.push(`- ${ar.role}: ${ar.outcome} — ${ar.findings} finding(s)${suffix}`);
+    }
+    if (findings.length > 0) {
+      lines.push("", "### Findings", "");
+      for (const f of findings) {
+        lines.push(`- [${f.auditor}] ${f.title}${f.dispatchable ? "" : " (not dispatched)"}`);
+      }
+    }
+    const sortedAuditIssues = [...auditIssues.values()].toSorted((a, b) => a.issue - b.issue);
+    if (sortedAuditIssues.length > 0) {
+      lines.push("", "### Audit-issues", "");
+      for (const ai of sortedAuditIssues) {
+        const r = rows.get(ai.issue);
+        const state =
+          r?.status === "done"
+            ? `done by ${r.resolvedBy ?? "l1"}`
+            : r?.status === "ready-for-human"
+              ? "escalated"
+              : ai.status;
+        lines.push(`- ${ai.title} [${ai.auditor}]: ${state}`);
+      }
+    }
   }
 
   if (promotions.length > 0) {
