@@ -10,6 +10,7 @@ function issue(overrides: Partial<Issue> = {}): Issue {
     status: "ready-for-agent",
     dependsOn: [1],
     verification: "bun test tests/health.test.ts",
+    arming: "auto",
     body: "Add a GET /health endpoint returning 200 with body `ok`.\n\n## Acceptance criteria\n\n- Returns 200.",
     path: "/plan/issues/03-add-endpoint.md",
     ...overrides,
