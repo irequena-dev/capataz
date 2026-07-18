@@ -13,6 +13,8 @@ export interface Git {
   head(): string;
   /** Stage all changes and commit as `capataz: arming <NN>-<slug>`. */
   commitArming(issue: { number: number; slug: string }): void;
+  /** Stage all changes and commit as `capataz: audit issues`; no-op when clean. */
+  commitAudit(): void;
   /** File paths touched by a single commit. */
   filesInCommit(ref: string): string[];
   /** Hard-reset to `ref` and clean untracked files. */
@@ -96,6 +98,13 @@ export function createGit(repoPath: string): Git {
       const id = `${String(issue.number).padStart(2, "0")}-${issue.slug}`;
       run("add", "-A");
       run("commit", "-m", `capataz: arming ${id}`);
+    },
+
+    commitAudit() {
+      run("add", "-A");
+      const staged = Bun.spawnSync(["git", "diff", "--cached", "--quiet"], { cwd: repoPath });
+      if (staged.exitCode === 0) return;
+      run("commit", "-m", "capataz: audit issues");
     },
 
     filesInCommit(ref) {
