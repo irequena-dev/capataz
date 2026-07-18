@@ -107,6 +107,7 @@ export type RunEvent =
   | { type: "audit-issue-written"; issue: number; auditor: Auditor; status: IssueStatus; at: number }
   | { type: "rogue-audit-edit"; role: Auditor; from: string; to: string; at: number }
   | { type: "audit-input-truncated"; role: Auditor; at: number }
+  | { type: "notification-result"; ok: boolean; url: string; error?: string; at: number }
   | {
       type: "run-finished";
       outcome: "completed" | "aborted";

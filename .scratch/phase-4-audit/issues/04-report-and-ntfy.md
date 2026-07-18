@@ -1,6 +1,6 @@
 # 04 — Report Audit section + ntfy Notification
 
-Status: ready-for-agent
+Status: done
 Depends-on: 3
 Verification: bun test tests/phase4/04-report-and-ntfy.test.ts
 

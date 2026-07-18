@@ -1,6 +1,6 @@
 # PRD: Phase 4 — Audit
 
-Status: ready-for-agent
+Status: done
 
 ## Goal
 

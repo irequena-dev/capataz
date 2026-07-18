@@ -1,7 +1,8 @@
 import { resolve } from "node:path";
 import { loadConfig } from "./config";
 import { createGit } from "./git";
-import { runLoop } from "./loop";
+import { runLoop, type RunEvent } from "./loop";
+import { sendNotification, summarizeRun } from "./notify";
 import { loadPlan } from "./plan";
 import { createRunLog } from "./report";
 
@@ -63,15 +64,21 @@ export async function main(argv: string[]): Promise<number> {
     git.createRunBranch(plan.feature);
 
     const runLog = createRunLog(plan.dir);
+    const events: RunEvent[] = [];
     const result = await runLoop({
       config,
       plan,
       git,
       repoPath: args.repo,
-      onEvent: runLog.onEvent,
+      onEvent: (event) => {
+        events.push(event);
+        runLog.onEvent(event);
+      },
       only: args.issue,
       noJudge: args.noJudge,
     });
+    const notified = await sendNotification(config.notify, summarizeRun(events));
+    if (notified) runLog.onEvent(notified);
     const reportPath = runLog.writeReport();
 
     const done = result.outcomes.filter((o) => o.kind === "done").length;

@@ -6,6 +6,7 @@ exports[`renderReport is a pure function over the event list: snapshot 1`] = `
 - Outcome: completed
 - Branch: capataz/toy-feature
 - Escalations: 1
+- Audit: skipped (no full pass)
 
 ## Issues
 
