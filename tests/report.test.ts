@@ -12,7 +12,7 @@ function sampleEvents(): RunEvent[] {
   return [
     { type: "run-started", feature: "toy-feature", judged: true, at: t0 },
     { type: "issue-started", issue: 1, title: "01 — scaffold", at: t0 + 1_000 },
-    { type: "attempt-started", issue: 1, attempt: 1, at: t0 + 1_100 },
+    { type: "attempt-started", issue: 1, attempt: 1, rung: "l1", at: t0 + 1_100 },
     {
       type: "backend-result",
       role: "executor",
@@ -42,9 +42,9 @@ function sampleEvents(): RunEvent[] {
       filesTouched: ["f1.txt", "src/a.ts"],
       at: t0 + 3_300,
     },
-    { type: "issue-done", issue: 1, attempts: 1, durationMs: 2_300, at: t0 + 3_300 },
+    { type: "issue-done", issue: 1, attempts: 1, resolvedBy: "l1", durationMs: 2_300, at: t0 + 3_300 },
     { type: "issue-started", issue: 2, title: "02 — flaky", at: t0 + 4_000 },
-    { type: "attempt-started", issue: 2, attempt: 1, at: t0 + 4_100 },
+    { type: "attempt-started", issue: 2, attempt: 1, rung: "l1", at: t0 + 4_100 },
     {
       type: "backend-result",
       role: "executor",
@@ -67,7 +67,7 @@ function sampleEvents(): RunEvent[] {
       output: "assertion failed",
       at: t0 + 5_200,
     },
-    { type: "attempt-started", issue: 2, attempt: 2, at: t0 + 5_300 },
+    { type: "attempt-started", issue: 2, attempt: 2, rung: "l1", at: t0 + 5_300 },
     {
       type: "backend-result",
       role: "executor",
@@ -84,7 +84,7 @@ function sampleEvents(): RunEvent[] {
     { type: "issue-escalated", issue: 2, attempts: 2, durationMs: 61_300, at: t0 + 65_400 },
     { type: "issue-skipped", issue: 3, title: "03 — dependent", blockedBy: [2], at: t0 + 65_500 },
     { type: "issue-started", issue: 4, title: "04 — independent", at: t0 + 66_000 },
-    { type: "attempt-started", issue: 4, attempt: 1, at: t0 + 66_100 },
+    { type: "attempt-started", issue: 4, attempt: 1, rung: "l1", at: t0 + 66_100 },
     {
       type: "backend-result",
       role: "executor",
@@ -114,7 +114,7 @@ function sampleEvents(): RunEvent[] {
       filesTouched: ["f4.txt"],
       at: t0 + 66_800,
     },
-    { type: "issue-done", issue: 4, attempts: 1, durationMs: 800, at: t0 + 66_800 },
+    { type: "issue-done", issue: 4, attempts: 1, resolvedBy: "l1", durationMs: 800, at: t0 + 66_800 },
     { type: "run-finished", outcome: "completed", escalations: 1, at: t0 + 67_000 },
   ];
 }
