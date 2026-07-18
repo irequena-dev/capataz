@@ -1,0 +1,32 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`buildFixerPrompt snapshot 1`] = `
+"You are a Fixer. A previous model attempted this issue and failed; its partial work is already in the working tree. Your job is to repair that work — not reimplement from scratch — until the Verification command passes. Work ONLY on this issue. Never modify or delete the armed test files. Run \`bun test tests/health.test.ts\` yourself before finishing. NEVER run git commands (commit, branch, reset, stash): capataz verifies and commits your work itself; a commit made by you breaks the run.
+
+# Issue: 03 — Add the /health endpoint
+
+Add a GET /health endpoint returning 200 with body \`ok\`.
+
+## Acceptance criteria
+
+- Returns 200.
+
+## Armed tests (do not modify or delete)
+
+Modifying or deleting any of these files fails the Issue automatically.
+
+- tests/health.test.ts
+- tests/health-edge.test.ts
+
+## Done so far this run
+
+- 01 — Scaffold server: src/server.ts (+40/-0), package.json (+5/-1)
+- 02 — Add router: src/router.ts (+12/-0)
+
+## Previous failed attempts
+
+### Attempt 1 failed. Verification output (tail):
+
+FAIL tests/health.test.ts
+expected 200, got 404"
+`;
