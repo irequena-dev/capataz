@@ -21,6 +21,8 @@ export interface Git {
   restoreFiles(ref: string, paths: string[]): void;
   /** Uncommit the last commit, keeping its changes in the tree and index. */
   softResetLast(): void;
+  /** Uncommit every commit back to `ref`, keeping all changes in the tree and index. */
+  softResetTo(ref: string): void;
   /** Full patch text between `fromRef` and `toRef`. */
   diffPatch(fromRef: string, toRef: string): string;
 }
@@ -61,6 +63,11 @@ export function createGit(repoPath: string): Git {
     commitIssue(issue) {
       const id = `${String(issue.number).padStart(2, "0")}-${issue.slug}`;
       run("add", "-A");
+      // A clean index here means the work is already committed (e.g. a rogue
+      // runner commit that the loop's guard couldn't un-stage): a no-op, not an
+      // infrastructure failure.
+      const staged = Bun.spawnSync(["git", "diff", "--cached", "--quiet"], { cwd: repoPath });
+      if (staged.exitCode === 0) return;
       run("commit", "-m", `capataz: ${id}`);
     },
 
@@ -109,6 +116,10 @@ export function createGit(repoPath: string): Git {
 
     softResetLast() {
       run("reset", "--soft", "HEAD~1");
+    },
+
+    softResetTo(ref) {
+      run("reset", "--soft", ref);
     },
 
     diffPatch(fromRef, toRef) {

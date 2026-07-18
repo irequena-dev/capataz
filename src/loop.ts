@@ -59,6 +59,7 @@ export type RunEvent =
       at: number;
     }
   | { type: "arming-violation"; issue: number; attempt: number; files: string[]; at: number }
+  | { type: "rogue-commit"; issue: number; attempt: number; from: string; to: string; at: number }
   | {
       type: "review-result";
       issue: number;
@@ -174,7 +175,7 @@ type AttemptResult =
   | { kind: "green" }
   | { kind: "red"; failureOutput: string };
 
-function isTreeClean(repoPath: string): boolean {
+export function isTreeClean(repoPath: string): boolean {
   const status = Bun.spawnSync(["git", "status", "--porcelain"], { cwd: repoPath });
   return status.stdout.toString().trim() === "";
 }
@@ -277,6 +278,29 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
     let pre: string | undefined;
     let armingCommit: string | undefined;
 
+    // Mark this issue ready-for-human, record the outcome, and enforce the
+    // per-run escalation budget. Returns the aborted RunResult when the budget
+    // is exceeded, otherwise undefined (the run continues).
+    const escalate = (): RunResult | undefined => {
+      issue.status = "ready-for-human";
+      escalatedIssues.push(issue);
+      const durationMs = Date.now() - startedAt;
+      emit({ type: "issue-escalated", issue: number, attempts, durationMs, at: Date.now() });
+      outcomes.push({ kind: "escalated", issue: number, attempts, durationMs });
+      escalations += 1;
+      if (escalations > config.budgets.max_escalations_per_run) {
+        emit({
+          type: "run-finished",
+          outcome: "aborted",
+          reason: "escalation-budget-exceeded",
+          escalations,
+          at: Date.now(),
+        });
+        return { kind: "aborted", reason: "escalation-budget-exceeded", outcomes, escalations };
+      }
+      return undefined;
+    };
+
     try {
       // Guaranteed by the plan loader for non-done issues.
       const verification = issue.verification;
@@ -331,7 +355,24 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
         emit({ type: "attempt-started", issue: number, attempt: attempts, at: Date.now() });
 
         const prompt = buildPrompt(issue, doneSummaries, failures, { armingFiles });
+        const preInvoke = git.head();
         const invoked = await invokeFn(executor, prompt, { cwd: repoPath });
+        // Rogue-commit guard: capataz owns version control. If the runner
+        // committed on its own (dangerous permission mode), un-commit back to
+        // where we were, keeping the work in the tree so the normal gates
+        // (verification, arming check, review, commit) still decide its fate.
+        const postInvoke = git.head();
+        if (postInvoke !== preInvoke) {
+          git.softResetTo(preInvoke);
+          emit({
+            type: "rogue-commit",
+            issue: number,
+            attempt: attempts,
+            from: preInvoke,
+            to: postInvoke,
+            at: Date.now(),
+          });
+        }
         emit({
           type: "backend-result",
           issue: number,
@@ -490,9 +531,9 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
         emit({ type: "issue-committed", issue: number, commit, filesTouched, at: Date.now() });
         emit({ type: "issue-done", issue: number, attempts, durationMs, at: Date.now() });
         outcomes.push({ kind: "done", issue: number, attempts, commit, filesTouched, durationMs });
-        if (judged) {
-          // The reviewer's summary was already recorded into doneSummaries on approve.
-        } else {
+        // Judged runs already recorded the reviewer's summary on approve; only
+        // the unjudged path needs a mechanical (title + files) summary.
+        if (!judged) {
           doneSummaries.push({ number, title: issue.title, files: filesTouched });
         }
       } else {
@@ -506,22 +547,8 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
         // The revert also wipes earlier uncommitted status writes; restore them.
         for (const prev of escalatedIssues) writeIssueStatus(prev.path, "ready-for-human");
         writeIssueStatus(issue.path, "ready-for-human");
-        issue.status = "ready-for-human";
-        escalatedIssues.push(issue);
-        const durationMs = Date.now() - startedAt;
-        emit({ type: "issue-escalated", issue: number, attempts, durationMs, at: Date.now() });
-        outcomes.push({ kind: "escalated", issue: number, attempts, durationMs });
-        escalations += 1;
-        if (escalations > config.budgets.max_escalations_per_run) {
-          emit({
-            type: "run-finished",
-            outcome: "aborted",
-            reason: "escalation-budget-exceeded",
-            escalations,
-            at: Date.now(),
-          });
-          return { kind: "aborted", reason: "escalation-budget-exceeded", outcomes, escalations };
-        }
+        const aborted = escalate();
+        if (aborted) return aborted;
       }
     } catch (error) {
       // Infrastructure failure (git or status write): degrade, don't die.
@@ -550,22 +577,8 @@ export async function runLoop(deps: RunLoopDeps): Promise<RunResult> {
         });
         return { kind: "aborted", reason: "infrastructure-failure", outcomes, escalations };
       }
-      issue.status = "ready-for-human";
-      escalatedIssues.push(issue);
-      const durationMs = Date.now() - startedAt;
-      emit({ type: "issue-escalated", issue: number, attempts, durationMs, at: Date.now() });
-      outcomes.push({ kind: "escalated", issue: number, attempts, durationMs });
-      escalations += 1;
-      if (escalations > config.budgets.max_escalations_per_run) {
-        emit({
-          type: "run-finished",
-          outcome: "aborted",
-          reason: "escalation-budget-exceeded",
-          escalations,
-          at: Date.now(),
-        });
-        return { kind: "aborted", reason: "escalation-budget-exceeded", outcomes, escalations };
-      }
+      const aborted = escalate();
+      if (aborted) return aborted;
     }
   }
 

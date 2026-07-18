@@ -1,6 +1,6 @@
 # 02 — Phase-2 code review nits
 
-Status: needs-triage
+Status: done
 Depends-on: none
 Verification: bun test
 
