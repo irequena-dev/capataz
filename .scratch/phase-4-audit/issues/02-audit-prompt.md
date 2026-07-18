@@ -1,6 +1,6 @@
 # 02 — Auditor prompt
 
-Status: ready-for-agent
+Status: done
 Depends-on: none
 Verification: bun test tests/phase4/02-audit-prompt.test.ts
 
