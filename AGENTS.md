@@ -16,7 +16,7 @@ Overall system design (roles, escalation, budgets, roadmap) lives in `docs/desig
 
 ### Required global skills
 
-This project assumes these skills are installed globally on the machine (not vendored here): `grilling`, `domain-modeling`, `tdd`, `grill-with-docs`, `to-prd`, `to-issue`, `improve-codebase-architecture`, `writing-great-skills`. Capataz-specific skills, when they exist, live in `.devin/skills/`.
+This project assumes these skills are installed globally on the machine (not vendored here): `grilling`, `domain-modeling`, `tdd`, `grill-with-docs`, `to-spec`, `to-tickets`, `wayfinder` (planning giant tasks), `improve-codebase-architecture`, `writing-great-skills`. Capataz-specific skills, when they exist, live in `.devin/skills/`.
 
 ### Domain docs
 
