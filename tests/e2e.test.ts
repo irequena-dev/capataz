@@ -56,6 +56,7 @@ function makeFixture(issues: FixtureIssue[], backendScript: string): Fixture {
       "  reviewer: fake",
       "budgets:",
       "  max_attempts_per_issue: 2",
+      "  attempts_l1: 2",
       "  max_escalations_per_run: 3",
       "  max_audit_issues: 5",
       "",

@@ -58,6 +58,9 @@ function judgedConfig(): Config {
     roles: { executor: "exec-b", armorer: "arm-b", reviewer: "rev-b" },
     budgets: {
       max_attempts_per_issue: 4,
+      attempts_l1: 4,
+      attempts_l2: 2,
+      attempts_l3: 2,
       max_escalations_per_run: 3,
       max_audit_issues: 5,
       verification_timeout_minutes: 1,
