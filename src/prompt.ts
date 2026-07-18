@@ -59,6 +59,63 @@ function render(
   return parts.join("\n\n");
 }
 
+const FINDING_TEMPLATE = `\`\`\`finding
+Title: <one line>
+Verification: <executable command, or empty if none applies>
+
+<description in prose>
+
+## Acceptance criteria
+
+- <criterion>
+\`\`\``;
+
+const AUDIT_ROLE_FRAMING: Record<AuditRole, string> = {
+  architect:
+    "You are the Architect. Audit the architecture of the branch's result: apply improve-codebase-architecture — hunt structural weaknesses, missing abstractions, coupling, and opportunities for deepening the design.",
+  security_auditor:
+    "You are the Security Auditor. Hunt vulnerabilities in the branch's result: auth bypass, IDOR, XSS, leaked secrets, unvalidated input.",
+};
+
+export type AuditRole = "architect" | "security_auditor";
+
+export interface AuditPromptInput {
+  role: AuditRole;
+  prd: string;
+  /** Full branch diff. */
+  diff: string;
+}
+
+/**
+ * Auditor dispatch prompt: read-only hard framing, role framing, the Finding
+ * output contract, the Plan's PRD, and the full branch diff tail-truncated to
+ * fit `MAX_PROMPT_CHARS`. `truncated` is true when the diff was capped.
+ */
+export function buildAuditPrompt(input: AuditPromptInput): {
+  prompt: string;
+  truncated: boolean;
+} {
+  const hardFraming = `This is a read-only audit. NEVER edit files. NEVER run git commands (commit, branch, reset, stash). Your ONLY output is Findings, emitted in your response as fenced \`finding\` blocks in this exact format:
+
+${FINDING_TEMPLATE}
+
+Each Finding must be self-contained and carry a proposed executable Verification command when one is possible (leave Verification empty otherwise).`;
+
+  const renderAudit = (diff: string): string =>
+    [
+      AUDIT_ROLE_FRAMING[input.role],
+      hardFraming,
+      `# PRD\n\n${input.prd}`,
+      `# Branch diff\n\n${diff}`,
+    ].join("\n\n");
+
+  const full = renderAudit(input.diff);
+  if (full.length <= MAX_PROMPT_CHARS) return { prompt: full, truncated: false };
+  const overflow = full.length - MAX_PROMPT_CHARS;
+  const room = Math.max(input.diff.length - overflow, TRUNCATION_MARK.length);
+  return { prompt: renderAudit(tail(input.diff, room)), truncated: true };
+}
+
 function tail(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return TRUNCATION_MARK + text.slice(text.length - (maxLength - TRUNCATION_MARK.length));
