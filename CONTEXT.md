@@ -45,8 +45,16 @@ Role that repairs a failed Issue within the Escalation. There are two Fixer rung
 _Avoid_: repairer
 
 **Audit**:
-Final phase of a run, once all Issues are `done`: auditor Roles examine the branch's full diff and emit findings that Capataz turns into new Issues. Auditors never edit code.
+Final phase of a run, entered only when every Issue ended `done`: auditor Roles examine the branch's full diff one after another and emit Findings that Capataz turns into audit-Issues. Runs exactly once per run (no re-audit of audit fixes). Auditors never edit code. Skipped in an Unjudged run.
 _Avoid_: final review, global QA
+
+**Finding**:
+A structured item emitted by an auditor Role: title, description, acceptance criteria and a proposed Verification. The only output an auditor produces; anything the auditor writes to the working tree is discarded.
+_Avoid_: comment, report item
+
+**audit-Issue**:
+An Issue that Capataz writes from a Finding during the Audit. Dispatched through the normal loop (Arming, gates, Escalation) in the same run, up to `max_audit_issues`; a Finding without a valid Verification, or beyond the cap, is written as `needs-triage` and never dispatched.
+_Avoid_: follow-up, audit ticket
 
 **Architect**:
 Auditor Role that evaluates the architecture of the result (using improve-codebase-architecture) and emits findings.
@@ -77,5 +85,9 @@ Executable command attached to an Issue whose exit code decides whether the Issu
 _Avoid_: check, manual validation
 
 **Unjudged run**:
-A run explicitly started without Armorer or Reviewer (per-run opt-out flag, never config). Reproduces the bare phase-1 loop; loudly marked in the report. Exists only for experiments and debugging Capataz itself.
+A run explicitly started without Armorer or Reviewer (per-run opt-out flag, never config). Reproduces the bare phase-1 loop (the Escalation still applies, the Audit does not); loudly marked in the report. Exists only for experiments and debugging Capataz itself.
 _Avoid_: fast mode, legacy mode
+
+**Notification**:
+Best-effort ntfy push sent when a run ends, whatever the outcome, summarising the result. Never affects the run: a failed push is only a warning.
+_Avoid_: alert, webhook
